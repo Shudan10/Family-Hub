@@ -1,13 +1,18 @@
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
     authRequired,
     clearCookie,
+    clientAddress,
     isAuthenticated,
     issueSession,
+    loginRetryAfter,
+    noteLoginAttempt,
+    noteLoginSuccess,
     passwordUnusable,
     sessionCookie,
     verifyPassword,
@@ -32,6 +37,14 @@ const PORT = Number(process.env.PORT || 8080);
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 
 const log = (...args) => console.log(new Date().toISOString(), ...args);
+
+/*
+ * The last net. Every request is wrapped below, so nothing should reach this;
+ * if something does, it is logged rather than left to Node's default for an
+ * unhandled rejection, which is to end the process -- and with it the app for
+ * the whole house, over one request.
+ */
+process.on('unhandledRejection', (err) => log('unhandled rejection', err));
 
 // ------------------------------------------------------------- http helpers --
 
@@ -61,20 +74,39 @@ function sendJson(res, status, body, headers = {}) {
 
 const fail = (res, status, message, extra = {}) => sendJson(res, status, { error: message, ...extra });
 
+/*
+ * An error that is the client's to fix, with the status that says so.
+ *
+ * Anything thrown that is not one of these is ours, and the client gets a
+ * plain "something went wrong" while the detail goes to the log: an error
+ * message from deep inside can carry a file path or a stack of internals,
+ * and none of it helps somebody who only wanted to plan Tuesday.
+ */
+class HttpError extends Error {
+    constructor(status, message) {
+        super(message);
+        this.status = status;
+    }
+}
+
 async function readBody(req, limit = 512 * 1024) {
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
         size += chunk.length;
-        if (size > limit) throw new Error('Request body too large.');
+        if (size > limit) throw new HttpError(413, 'Request body too large.');
         chunks.push(chunk);
     }
     if (!chunks.length) return {};
+    let body;
     try {
-        return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {
-        throw new Error('Request body is not valid JSON.');
+        throw new HttpError(400, 'Request body is not valid JSON.');
     }
+    // `null` or a bare number parses fine and then breaks every `body.x`.
+    if (!body || typeof body !== 'object') throw new HttpError(400, 'Request body is not a JSON object.');
+    return body;
 }
 
 function serveStatic(req, res, urlPath) {
@@ -128,11 +160,32 @@ route(
     async (req, res) => {
         const body = await readBody(req);
         if (!authRequired()) return sendJson(res, 200, { ok: true, required: false });
-        if (!verifyPassword(String(body.password ?? ''))) {
+
+        // Checked before the password is even looked at, so a client that is
+        // waiting out its cooldown costs no scrypt either.
+        const client = clientAddress(req);
+        const wait = loginRetryAfter(client);
+        if (wait > 0) {
+            const seconds = Math.ceil(wait / 1000);
+            const minutes = Math.max(1, Math.ceil(wait / 60000));
+            return sendJson(
+                res,
+                429,
+                { error: `Too many wrong passwords. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` },
+                { 'Retry-After': String(seconds) },
+            );
+        }
+
+        const attempt = noteLoginAttempt(client);
+        if (!(await verifyPassword(String(body.password ?? '')))) {
+            // The address only, never what was typed: a wrong password is
+            // very often the right one for something else.
+            log('failed login from', client);
             // Constant-ish delay so the endpoint is not a fast password oracle.
             await new Promise((r) => setTimeout(r, 500));
             return fail(res, 401, 'That password did not work.');
         }
+        noteLoginSuccess(client, attempt);
         const { token } = issueSession();
         const secure = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
         sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(token, { secure }) });
@@ -158,10 +211,15 @@ route('POST', /^\/api\/meals$/, async (req, res) => {
 });
 
 route('PUT', /^\/api\/meals\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    // The body first, then the library. The other way round, the library was
+    // read, then the request waited on a slow phone's upload, and anything
+    // saved meanwhile -- a meal added from the other phone -- was written over
+    // with the copy from before it existed.
+    const body = await readBody(req);
     const meals = loadMeals();
     const idx = meals.findIndex((m) => m.id === match[1]);
     if (idx < 0) return fail(res, 404, 'That meal is not in the library any more.');
-    const { meal, errors } = normaliseMeal(await readBody(req), meals[idx]);
+    const { meal, errors } = normaliseMeal(body, meals[idx]);
     if (errors.length) return fail(res, 400, errors[0], { errors });
     meals[idx] = meal;
     saveMeals(meals);
@@ -284,10 +342,90 @@ route('GET', /^\/api\/shopping$/, async (req, res, match, url) => {
     sendJson(res, 200, { from, to, items: shoppingList(loadPlan(), loadMeals(), dates) });
 });
 
+// ------------------------------------------------------------------ guards --
+
+/*
+ * Which Host headers are believed when there is no password.
+ *
+ * Without a password the only thing between a web page and the plan is that
+ * the page has to be served from here -- and DNS rebinding gets around that: a
+ * site points its own name at this machine's LAN address, and the browser then
+ * treats requests to it as same-origin with that site. What the attack cannot
+ * fake is the Host header, which carries the attacker's name. So a Host is
+ * accepted only if it is something a family member could actually be typing:
+ * an IP address, localhost, a Tailscale *.ts.net name, a name with no dots (a
+ * MagicDNS short name, the container's own name) or a .local one -- neither of
+ * which a stranger can register -- or a name in MEALPLAN_ALLOWED_HOSTS.
+ *
+ * With a password set this is not applied at all. The session cookie does the
+ * job, and the Cloudflare tunnel's public name is not on any list here.
+ */
+const ALLOWED_HOSTS = (process.env.MEALPLAN_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase().replace(/\.$/, ''))
+    .filter(Boolean);
+
+function hostAllowed(header) {
+    // No Host at all is not a browser, and a browser is what rebinding needs.
+    if (!header) return true;
+    let name;
+    try {
+        name = new URL(`http://${header}`).hostname.toLowerCase().replace(/\.$/, '');
+    } catch {
+        return false;
+    }
+    if (name.startsWith('[') || net.isIPv4(name)) return true;
+    if (name === 'localhost' || name.endsWith('.localhost')) return true;
+    if (name.endsWith('.ts.net') || name.endsWith('.local') || !name.includes('.')) return true;
+    // An entry starting with a dot allows the whole domain under it.
+    return ALLOWED_HOSTS.some((h) => (h.startsWith('.') ? name.endsWith(h) : name === h));
+}
+
+/*
+ * Same-origin guard for state changes. The cookie is SameSite=Lax already;
+ * this closes the gap for clients that ignore it -- and, with no password,
+ * there is no cookie at all and this is the whole of the protection.
+ *
+ * A form posted from another site carries an Origin, which is checked. Where
+ * the Origin is missing, a browser still says where the request came from in
+ * Sec-Fetch-Site, so "cross-site" is refused too. Neither header present is a
+ * script or curl, which no browser page can make on someone else's behalf.
+ */
+function crossOrigin(req) {
+    const origin = req.headers.origin;
+    if (origin) {
+        try {
+            return new URL(origin).host !== req.headers.host;
+        } catch {
+            return true;
+        }
+    }
+    return req.headers['sec-fetch-site'] === 'cross-site';
+}
+
 // ------------------------------------------------------------------ server --
 
-const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+async function handle(req, res) {
+    // Never framed, so no other page can lay this one under a decoy and have
+    // somebody tap "Clear week" through it.
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    // A fixed base rather than the Host header: only the path and query are
+    // used, and a malformed Host made this throw before anything could catch.
+    let url;
+    try {
+        url = new URL(req.url, 'http://localhost');
+    } catch {
+        return fail(res, 400, 'Bad request.');
+    }
+
+    if (!authRequired() && !hostAllowed(req.headers.host)) {
+        log('refused host', JSON.stringify(String(req.headers.host).slice(0, 200)));
+        return fail(res, 421, 'Meal Plan does not answer to this address. It can be added to MEALPLAN_ALLOWED_HOSTS.');
+    }
+
     const isApi = url.pathname.startsWith('/api/') || url.pathname === '/healthz';
 
     if (!isApi) return serveStatic(req, res, url.pathname);
@@ -299,27 +437,37 @@ const server = http.createServer(async (req, res) => {
         return fail(res, 401, 'Not signed in.');
     }
 
-    // Same-origin guard for state changes. The cookie is SameSite=Lax already;
-    // this closes the gap for clients that ignore it.
-    if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
-        const origin = req.headers.origin;
-        if (origin) {
-            let sameHost = false;
-            try {
-                sameHost = new URL(origin).host === req.headers.host;
-            } catch {
-                sameHost = false;
-            }
-            if (!sameHost) return fail(res, 403, 'Cross-origin request refused.');
-        }
+    if (['POST', 'PUT', 'DELETE'].includes(req.method) && crossOrigin(req)) {
+        return fail(res, 403, 'Cross-origin request refused.');
     }
 
     try {
         await match.handler(req, res, match.pattern.exec(url.pathname), url);
     } catch (err) {
+        if (err instanceof HttpError) {
+            if (!res.headersSent) fail(res, err.status, err.message);
+            return;
+        }
         log('request failed', url.pathname, err);
-        if (!res.headersSent) fail(res, 500, err.message || 'Internal error');
+        if (!res.headersSent) fail(res, 500, 'Something went wrong on the server.');
     }
+}
+
+/*
+ * Wrapped whole, so that nothing a request does -- in a route or in the
+ * parsing before it -- can escape as a rejection this async listener would
+ * otherwise hand to Node unhandled.
+ */
+const server = http.createServer((req, res) => {
+    handle(req, res).catch((err) => {
+        log('request failed outside its handler', req.url, err);
+        try {
+            if (!res.headersSent) fail(res, 500, 'Something went wrong on the server.');
+            else res.destroy();
+        } catch {
+            res.destroy();
+        }
+    });
 });
 
 ensureDataDir();

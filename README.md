@@ -60,7 +60,8 @@ Then open `http://<this machine>:8083`.
 | `PORT` | Port inside the container. Default `8080`. |
 | `MEALPLAN_DATA` | Where the two JSON files live. Default `/data`. |
 | `MEALPLAN_PASSWORD_HASH` | A `scrypt:salt:hash` value. **Without it there is no password and anyone who can reach the port can change the plan.** |
-| `SESSION_SECRET` | Signs session cookies. Generated per start if unset, which logs everyone out on restart. |
+| `SESSION_SECRET` | Signs session cookies, together with the password hash, so changing the password signs everyone out. Generated per start if unset, which logs everyone out on restart. |
+| `MEALPLAN_ALLOWED_HOSTS` | Only matters with no password set: extra names, comma-separated, that the app answers to (`.example.com` allows a whole domain). IP addresses, `localhost`, `*.ts.net`, `*.local` and dotless names are always accepted; anything else is refused, which is what stops a DNS-rebinding page from reaching the plan. |
 
 Generate a password hash:
 
