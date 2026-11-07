@@ -32,6 +32,9 @@ import {
     shoppingList,
     SLOTS,
 } from './lib/store.js';
+import { loadMembers, MEMBER_COLOURS, normaliseMember, saveMembers } from './lib/family.js';
+import { loadSettings, normaliseLocation, saveSettings, UNITS } from './lib/settings.js';
+import { forecast, forgetForecast, searchPlaces } from './lib/weather.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
@@ -340,6 +343,102 @@ route('DELETE', /^\/api\/plan$/, async (req, res, match, url) => {
 route('GET', /^\/api\/shopping$/, async (req, res, match, url) => {
     const { from, to, dates } = rangeFrom(url);
     sendJson(res, 200, { from, to, items: shoppingList(loadPlan(), loadMeals(), dates) });
+});
+
+// ----------------------------------------------------------------- family --
+
+route('GET', /^\/api\/members$/, async (req, res) => sendJson(res, 200, { members: loadMembers(), colours: MEMBER_COLOURS }));
+
+route('POST', /^\/api\/members$/, async (req, res) => {
+    const body = await readBody(req);
+    const members = loadMembers();
+    const { member, errors } = normaliseMember(body, members);
+    if (errors.length) throw new HttpError(400, errors[0]);
+    members.push(member);
+    saveMembers(members);
+    sendJson(res, 201, { member });
+});
+
+route('PUT', /^\/api\/members\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const body = await readBody(req);
+    const members = loadMembers();
+    const idx = members.findIndex((m) => m.id === match[1]);
+    if (idx < 0) throw new HttpError(404, 'That person is not in the family list any more.');
+    const { member, errors } = normaliseMember(body, members, members[idx]);
+    if (errors.length) throw new HttpError(400, errors[0]);
+    members[idx] = member;
+    saveMembers(members);
+    sendJson(res, 200, { member });
+});
+
+route('DELETE', /^\/api\/members\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const members = loadMembers();
+    const next = members.filter((m) => m.id !== match[1]);
+    if (next.length === members.length) throw new HttpError(404, 'That person is not in the family list any more.');
+    saveMembers(next);
+    // Their events and chores are not deleted with them: they lose the name and
+    // become everybody's. See unassignMember in the events and tasks stores.
+    unassignEverywhere(match[1]);
+    sendJson(res, 200, { ok: true });
+});
+
+/*
+ * What happens to someone's things when they are taken off the list. Filled in
+ * by the stores that have things to hand back; a list so that adding events
+ * and tasks does not mean editing the delete route.
+ */
+const unassigners = [];
+function unassignEverywhere(memberId) {
+    for (const fn of unassigners) fn(memberId);
+}
+
+// --------------------------------------------------------------- settings --
+
+route('GET', /^\/api\/settings$/, async (req, res) => sendJson(res, 200, { settings: loadSettings(), units: UNITS }));
+
+route('PUT', /^\/api\/settings$/, async (req, res) => {
+    const body = await readBody(req);
+    const next = {};
+    if ('units' in body) {
+        if (!UNITS.includes(body.units)) throw new HttpError(400, 'Units are fahrenheit or celsius.');
+        next.units = body.units;
+    }
+    if ('location' in body) {
+        if (body.location === null) {
+            next.location = null;
+        } else {
+            const location = normaliseLocation(body.location);
+            if (!location) throw new HttpError(400, 'That is not a place this can find the weather for.');
+            next.location = location;
+        }
+    }
+    const settings = saveSettings(next);
+    forgetForecast();
+    sendJson(res, 200, { settings });
+});
+
+// ---------------------------------------------------------------- weather --
+
+route('GET', /^\/api\/weather\/places$/, async (req, res, match, url) => {
+    try {
+        sendJson(res, 200, { places: await searchPlaces(url.searchParams.get('q')) });
+    } catch (err) {
+        log('town search failed', err.message);
+        throw new HttpError(502, 'The town search could not be reached. Try again in a moment.');
+    }
+});
+
+route('GET', /^\/api\/weather$/, async (req, res) => {
+    const { location, units } = loadSettings();
+    // Not set yet is an answer, not an error: the Today screen shows a prompt.
+    if (!location) return sendJson(res, 200, { configured: false });
+    try {
+        sendJson(res, 200, { configured: true, ...(await forecast(location, units)) });
+    } catch (err) {
+        // The rest of the Today screen still works without the weather.
+        log('weather failed', err.message);
+        sendJson(res, 200, { configured: true, unavailable: true, place: location.name });
+    }
 });
 
 // ------------------------------------------------------------------ guards --

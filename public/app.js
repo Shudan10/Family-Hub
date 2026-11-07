@@ -17,8 +17,13 @@ const WEEK_STARTS_ON = 0;
 
 const state = {
     meals: [],
+    members: [],
+    settings: null,
     days: [],
-    view: 'plan',
+    view: 'today',
+    // The last of the three Meals views that was open, so the tab comes back
+    // to it rather than always to the plan.
+    foodView: 'plan',
     weekStart: null,
     monthStart: null, // the 1st of the month the calendar is showing
     // The calendar shows a month or a single week. A week shares weekStart
@@ -211,27 +216,51 @@ async function signIn(event) {
 
 // ----------------------------------------------------------- rendering -----
 
-function setView(view) {
+/*
+ * Every destination, which tab it belongs to, and what it shows on top.
+ *
+ * The plan, the recipes and the shopping list are three views behind one tab,
+ * Meals, with a switch at the top: a phone's dock has room for five tabs, and
+ * a family board needs more destinations than that.
+ */
+const VIEWS = {
+    today: { tab: 'today', title: 'Today' },
+    cal: { tab: 'cal', title: 'Calendar', stepped: true },
+    plan: { tab: 'food', title: 'Meals', stepped: true },
+    meals: { tab: 'food', title: 'Meals' },
+    shop: { tab: 'food', title: 'Meals', stepped: true },
+    settings: { tab: 'settings', title: 'Settings' },
+};
+const FOOD_VIEWS = ['plan', 'meals', 'shop'];
+
+function setView(requested) {
+    // The Meals tab opens whichever of its three was open last.
+    let view = requested === 'food' ? state.foodView : requested;
+    if (!VIEWS[view]) view = 'today';
+    if (FOOD_VIEWS.includes(view)) state.foodView = view;
     state.view = view;
+    const def = VIEWS[view];
+
     for (const tab of document.querySelectorAll('.tab')) {
-        tab.classList.toggle('is-active', tab.dataset.view === view);
+        tab.classList.toggle('is-active', tab.dataset.view === def.tab);
     }
-    $('view-plan').hidden = view !== 'plan';
-    $('view-cal').hidden = view !== 'cal';
-    $('view-meals').hidden = view !== 'meals';
-    $('view-shop').hidden = view !== 'shop';
-    $('view-themes').hidden = view !== 'themes';
+    for (const id of Object.keys(VIEWS)) $(`view-${id}`).hidden = id !== view;
+
+    const food = FOOD_VIEWS.includes(view);
+    $('food-tabs').hidden = !food;
+    for (const b of document.querySelectorAll('#food-tabs [data-sub]')) {
+        const on = b.dataset.sub === view;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', String(on));
+    }
 
     // The stepper steps by a week on the plan and the shopping list, and by a
-    // month on the calendar. The meal library and the themes have nothing to
-    // step through.
-    const stepped = view !== 'meals' && view !== 'themes';
-    $('weeknav').hidden = !stepped;
-    $('btn-today').hidden = !stepped;
+    // month on the calendar. The rest have nothing to step through.
+    $('weeknav').hidden = !def.stepped;
+    $('btn-today').hidden = !def.stepped;
     $('btn-today').textContent =
         view === 'cal' ? (state.calScope === 'month' ? 'Week view' : 'Month view') : 'Today';
-    $('view-title').textContent =
-        { plan: 'Plan', cal: 'Calendar', meals: 'Meals', shop: 'Shopping', themes: 'Themes' }[view] ?? 'Plan';
+    $('view-title').textContent = def.title;
 
     /*
      * The label is set here, not only by whichever loader runs.
@@ -241,10 +270,11 @@ function setView(view) {
      * so it kept whatever the calendar had put there. Deciding it from the view
      * is the only way it cannot disagree with what is on screen.
      */
-    if (stepped) $('week-label').textContent = stepperLabel(view);
+    if (def.stepped) $('week-label').textContent = stepperLabel(view);
 
+    if (view === 'today') loadToday();
     if (view === 'shop') loadShopping();
-    if (view === 'themes') renderThemes();
+    if (view === 'settings') renderSettings();
     if (view === 'cal') loadCalendar().catch((e) => toast(e.message));
     // Coming back to the plan from the calendar, where a day may have been
     // changed: the week on screen could be out of date.
@@ -509,7 +539,7 @@ async function loadWeek() {
 }
 
 async function loadAll() {
-    await loadMeals();
+    await Promise.all([loadMeals(), loadMembers(), loadSettings()]);
     await loadWeek();
     renderMeals();
 }
@@ -648,6 +678,7 @@ async function pick(mealId) {
         // Whichever view is on screen is the one that has to be right. The other
         // reloads when it is next opened, so there is nothing to keep in step.
         if (state.view === 'cal') await loadCalendar();
+        else if (state.view === 'today') await loadTodayDinner();
         else await loadWeek();
     } catch (e) {
         toast(e.message);
@@ -779,6 +810,329 @@ async function clearWeek() {
     }
 }
 
+// ------------------------------------------------------------------ today --
+
+/*
+ * Open-Meteo's weather codes, as a word and a picture.
+ *
+ * Emoji rather than an icon set: they are already on every iPad and phone,
+ * they are drawn in colour at any size, and a board read from across a room
+ * needs a sun that looks like a sun more than it needs a consistent stroke.
+ */
+const WEATHER = [
+    [[0], 'Clear', '☀️', '🌙'],
+    [[1], 'Mostly clear', '🌤️', '🌙'],
+    [[2], 'Partly cloudy', '⛅', '☁️'],
+    [[3], 'Cloudy', '☁️', '☁️'],
+    [[45, 48], 'Fog', '🌫️', '🌫️'],
+    [[51, 53, 55, 56, 57], 'Drizzle', '🌦️', '🌧️'],
+    [[61, 63, 65, 66, 67], 'Rain', '🌧️', '🌧️'],
+    [[71, 73, 75, 77], 'Snow', '🌨️', '🌨️'],
+    [[80, 81, 82], 'Showers', '🌦️', '🌧️'],
+    [[85, 86], 'Snow showers', '🌨️', '🌨️'],
+    [[95, 96, 99], 'Thunderstorms', '⛈️', '⛈️'],
+];
+
+function weatherFor(code, isDay = true) {
+    const row = WEATHER.find(([codes]) => codes.includes(code));
+    if (!row) return { label: '', icon: '🌡️' };
+    return { label: row[1], icon: isDay ? row[2] : row[3] };
+}
+
+const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+};
+
+let clockTimer = null;
+let todayRefresh = null;
+let todayShown = null; // the date the Today screen was last drawn for
+
+function tickClock() {
+    const now = new Date();
+    $('today-time').textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    $('today-date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    // Left open overnight, as a board is, it has to notice that today is now
+    // tomorrow -- otherwise it shows yesterday's dinner until someone touches it.
+    if (todayShown && isoDate(now) !== todayShown && state.view === 'today') loadToday();
+}
+
+async function loadToday() {
+    todayShown = isoDate(new Date());
+    tickClock();
+    if (!clockTimer) clockTimer = setInterval(tickClock, 1000);
+    // Something changed from a phone reaches the board within five minutes.
+    // Skipped while the screen is hidden, so a phone in a pocket does not poll.
+    clearInterval(todayRefresh);
+    todayRefresh = setInterval(() => {
+        if (state.view === 'today' && !document.hidden) loadToday();
+    }, 5 * 60_000);
+    await Promise.all([loadTodayWeather(), loadTodayDinner()]);
+}
+
+async function loadTodayWeather() {
+    const host = $('today-weather');
+    let w;
+    try {
+        w = await api('/api/weather');
+    } catch {
+        return host.replaceChildren(el('h2', 'panel-label', 'Weather'), el('p', 'hint', 'The weather could not be loaded.'));
+    }
+    if (!w.configured) {
+        const go = el('button', 'ghost', 'Choose your town');
+        go.type = 'button';
+        go.addEventListener('click', () => setView('settings'));
+        return host.replaceChildren(
+            el('h2', 'panel-label', 'Weather'),
+            el('p', 'hint', 'Tell it where you are and the weather shows here.'),
+            go,
+        );
+    }
+    if (w.unavailable) {
+        return host.replaceChildren(
+            el('h2', 'panel-label', w.place),
+            el('p', 'hint', 'The weather service could not be reached just now. It will try again in a few minutes.'),
+        );
+    }
+
+    const now = weatherFor(w.current.code, w.current.isDay);
+    const today = w.days[0];
+    const head = el('div', 'wx-now');
+    head.append(el('span', 'wx-icon', now.icon), el('span', 'wx-temp', `${w.current.temp}°`));
+    const sub = el('div', 'wx-sub');
+    sub.append(
+        el('span', 'wx-label', now.label),
+        el('span', 'wx-range', today ? `H ${today.high}°  L ${today.low}°` : ''),
+    );
+
+    const ahead = el('div', 'wx-days');
+    for (const day of w.days.slice(1, 5)) {
+        const cell = el('div', 'wx-day');
+        cell.append(
+            el('span', 'wx-dname', parseIso(day.date).toLocaleDateString(undefined, { weekday: 'short' })),
+            el('span', 'wx-dicon', weatherFor(day.code).icon),
+            el('span', 'wx-drange', `${day.high}° ${day.low}°`),
+        );
+        ahead.append(cell);
+    }
+    host.replaceChildren(el('h2', 'panel-label', w.place), head, sub, ahead);
+}
+
+async function loadTodayDinner() {
+    const host = $('today-dinner');
+    const now = new Date();
+    const today = isoDate(now);
+    const next = new Date(now);
+    next.setDate(next.getDate() + 1);
+    const tomorrow = isoDate(next);
+    let days;
+    try {
+        ({ days } = await api(`/api/plan?from=${today}&to=${tomorrow}`));
+    } catch {
+        return host.replaceChildren(el('p', 'hint', 'Dinner could not be loaded.'));
+    }
+    const tonight = mealById(days[0]?.slots?.dinner);
+    const after = mealById(days[1]?.slots?.dinner);
+
+    const main = el('button', `today-meal${tonight ? '' : ' is-empty'}`, tonight ? tonight.name : 'Nothing planned yet');
+    main.type = 'button';
+    // Straight to the picker for tonight, without a detour through the week.
+    main.addEventListener('click', () => openPicker(today, 'dinner'));
+    host.replaceChildren(main);
+    if (after) host.append(el('p', 'hint', `Tomorrow: ${after.name}`));
+}
+
+// --------------------------------------------------------------- settings --
+
+function renderSettings() {
+    renderMembers();
+    renderWeatherSettings();
+    renderThemes();
+}
+
+async function loadMembers() {
+    const { members, colours } = await api('/api/members');
+    state.members = members;
+    state.memberColours = colours;
+}
+
+async function loadSettings() {
+    const { settings } = await api('/api/settings');
+    state.settings = settings;
+}
+
+const memberById = (id) => state.members.find((m) => m.id === id) || null;
+
+/*
+ * Text that stays readable on any of the family colours: whichever of white or
+ * near-black stands out more from it. Lime and amber need dark text and blue
+ * and purple need light, and guessing by name gets that wrong.
+ */
+function inkOn(hex) {
+    const lum = (h) => {
+        const v = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+            .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    };
+    const L = lum(hex);
+    return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.0555) ? '#ffffff' : '#0b1220';
+}
+
+function avatar(member, className = 'avatar') {
+    const a = el('span', className, (member.name.trim()[0] || '?').toUpperCase());
+    a.style.background = member.colour;
+    a.style.color = inkOn(member.colour);
+    a.setAttribute('aria-hidden', 'true');
+    return a;
+}
+
+function renderMembers() {
+    const host = $('member-list');
+    if (!state.members.length) {
+        return host.replaceChildren(el('div', 'empty', 'Nobody yet. Add the people in the house, and give each one a colour.'));
+    }
+    host.replaceChildren(
+        ...state.members.map((m) => {
+            const row = el('button', 'member-row');
+            row.type = 'button';
+            row.dataset.member = m.id;
+            row.append(avatar(m), el('span', 'member-name', m.name), el('span', 'slot-chevron', '›'));
+            return row;
+        }),
+    );
+}
+
+let editingMember = null;
+
+function openMemberEditor(member) {
+    editingMember = member;
+    $('member-title').textContent = member ? `Edit ${member.name}` : 'Add someone';
+    $('member-name').value = member?.name ?? '';
+    $('member-error').hidden = true;
+    $('member-delete').hidden = !member;
+
+    // A colour someone else already has is still offered -- twins in matching
+    // colours is a choice -- but the first free one is picked for a new person.
+    const taken = new Set(state.members.filter((m) => m.id !== member?.id).map((m) => m.colour));
+    const chosen = member?.colour ?? state.memberColours.find((c) => !taken.has(c)) ?? state.memberColours[0];
+    const host = $('member-colours');
+    host.querySelectorAll('label').forEach((n) => n.remove());
+    for (const colour of state.memberColours) {
+        const label = el('label', 'swatch');
+        const input = el('input');
+        input.type = 'radio';
+        input.name = 'member-colour';
+        input.value = colour;
+        input.checked = colour === chosen;
+        const dot = el('span', 'swatch-dot');
+        dot.style.background = colour;
+        label.title = taken.has(colour) ? 'Someone else has this colour' : '';
+        label.append(input, dot);
+        host.append(label);
+    }
+    $('member-editor').showModal();
+    $('member-name').focus();
+}
+
+async function saveMember(event) {
+    event.preventDefault();
+    const err = $('member-error');
+    err.hidden = true;
+    const body = {
+        name: $('member-name').value,
+        colour: document.querySelector('input[name="member-colour"]:checked')?.value,
+    };
+    try {
+        if (editingMember) await api(`/api/members/${editingMember.id}`, { method: 'PUT', body });
+        else await api('/api/members', { method: 'POST', body });
+        $('member-editor').close();
+        await loadMembers();
+        renderMembers();
+    } catch (e) {
+        err.textContent = e.message;
+        err.hidden = false;
+    }
+}
+
+async function removeMember() {
+    const member = editingMember;
+    if (!member) return;
+    const sure = await askConfirm({
+        title: `Remove ${member.name}?`,
+        body: 'Anything that was theirs stays, and becomes everybody\'s instead.',
+        confirmLabel: 'Remove',
+        danger: true,
+    });
+    if (!sure) return;
+    try {
+        await api(`/api/members/${member.id}`, { method: 'DELETE' });
+        $('member-editor').close();
+        await loadMembers();
+        renderMembers();
+    } catch (e) {
+        toast(e.message);
+    }
+}
+
+function renderWeatherSettings() {
+    const place = state.settings?.location?.name;
+    $('weather-place').textContent = place
+        ? `Showing the weather for ${place}.`
+        : 'No town chosen yet. Search for yours and pick it from the list.';
+    for (const b of document.querySelectorAll('#units [data-units]')) {
+        const on = b.dataset.units === state.settings?.units;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-checked', String(on));
+    }
+}
+
+async function searchPlaces(event) {
+    event.preventDefault();
+    const q = $('place-search').value.trim();
+    const host = $('place-results');
+    if (q.length < 2) return host.replaceChildren(el('p', 'hint', 'Type at least two letters of the town.'));
+    host.replaceChildren(el('p', 'hint', 'Searching…'));
+    try {
+        const { places } = await api(`/api/weather/places?q=${encodeURIComponent(q)}`);
+        if (!places.length) return host.replaceChildren(el('p', 'hint', `Nothing found for "${q}". Try the nearest larger town.`));
+        host.replaceChildren(
+            ...places.map((place) => {
+                const b = el('button', 'picker-row', place.name);
+                b.type = 'button';
+                b.addEventListener('click', () => choosePlace(place));
+                return b;
+            }),
+        );
+    } catch (e) {
+        host.replaceChildren(el('p', 'error', e.message));
+    }
+}
+
+async function choosePlace(place) {
+    try {
+        const { settings } = await api('/api/settings', { method: 'PUT', body: { location: place } });
+        state.settings = settings;
+        $('place-results').replaceChildren();
+        $('place-search').value = '';
+        renderWeatherSettings();
+        toast(`Weather set to ${place.name}`);
+    } catch (e) {
+        toast(e.message);
+    }
+}
+
+async function chooseUnits(units) {
+    try {
+        const { settings } = await api('/api/settings', { method: 'PUT', body: { units } });
+        state.settings = settings;
+        renderWeatherSettings();
+    } catch (e) {
+        toast(e.message);
+    }
+}
+
 // --------------------------------------------------------------- themes ----
 
 /*
@@ -903,6 +1257,23 @@ $('gate-form').addEventListener('submit', signIn);
 for (const tab of document.querySelectorAll('.tab')) {
     tab.addEventListener('click', () => setView(tab.dataset.view));
 }
+for (const b of document.querySelectorAll('#food-tabs [data-sub]')) {
+    b.addEventListener('click', () => setView(b.dataset.sub));
+}
+
+// --- settings: family and weather ---
+$('btn-add-member').addEventListener('click', () => openMemberEditor(null));
+$('member-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-member]');
+    if (row) openMemberEditor(memberById(row.dataset.member));
+});
+$('member-form').addEventListener('submit', saveMember);
+$('member-close').addEventListener('click', () => $('member-editor').close());
+$('member-delete').addEventListener('click', removeMember);
+$('place-form').addEventListener('submit', searchPlaces);
+for (const b of document.querySelectorAll('#units [data-units]')) {
+    b.addEventListener('click', () => chooseUnits(b.dataset.units));
+}
 
 $('week-prev').addEventListener('click', () => step(-1));
 $('week-next').addEventListener('click', () => step(1));
@@ -952,7 +1323,7 @@ $('day-close').addEventListener('click', () => $('day').close());
 
 $('meal-search').addEventListener('input', renderMeals);
 
-$('view-themes').addEventListener('click', (e) => {
+$('view-settings').addEventListener('click', (e) => {
     const card = e.target.closest('.theme-card');
     if (card) chooseTheme(card.dataset.theme);
 });
@@ -996,7 +1367,7 @@ $('randomer-close').addEventListener('click', () => $('randomer').close());
         $('gate').hidden = true;
         $('app').hidden = false;
         await loadAll();
-        setView('plan');
+        setView('today');
     } catch {
         showGate();
     }

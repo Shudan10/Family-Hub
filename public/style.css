@@ -935,3 +935,156 @@ body::after {
     content: '  ✓';
     color: var(--accent);
 }
+
+/* =============================================================== the hub == */
+
+/* A card for anything that is not a day or a meal: the Today panels and the
+   settings sections. The same surface as the day cards, so the app reads as
+   one thing rather than two designs side by side. */
+.panel-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    min-width: 0;
+}
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.panel-head h2 { font-size: 17px; }
+.panel-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 8px;
+}
+
+/* --- a two- or three-way switch, for the Meals views and the units --- */
+.segmented {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 13px;
+}
+.segmented button {
+    flex: 1;
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+    padding: 8px 10px;
+    color: var(--muted);
+    font-weight: 600;
+    min-height: 38px;
+}
+.segmented button.is-active {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+.segmented.compact { display: inline-flex; margin: 12px 0 0; }
+.segmented.compact button { flex: 0 0 auto; min-width: 58px; }
+
+/* ------------------------------------------------------------ today --- */
+
+.today-grid { display: grid; gap: 14px; }
+.today-grid .panel-card { margin-bottom: 0; }
+
+.clock {
+    font-size: clamp(54px, 15vw, 120px);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.clock-date { margin-top: 8px; font-size: 19px; color: var(--muted); font-weight: 560; }
+
+.wx-now { display: flex; align-items: center; gap: 12px; }
+.wx-icon { font-size: 56px; line-height: 1; }
+.wx-temp { font-size: 54px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.wx-sub { display: flex; justify-content: space-between; gap: 10px; margin: 8px 0 14px; color: var(--muted); font-weight: 560; }
+.wx-range { font-variant-numeric: tabular-nums; }
+.wx-days {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+}
+.wx-day { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.wx-dname { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wx-dicon { font-size: 26px; line-height: 1; }
+.wx-drange { font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.today-meal {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    padding: 2px 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--slot-dinner);
+}
+.today-meal.is-empty { color: var(--muted); font-weight: 560; font-size: 19px; }
+.today-meal:active { transform: none; opacity: 0.7; }
+
+/* ---------------------------------------------------------- settings --- */
+
+.settings-grid { display: grid; gap: 14px; }
+.settings-grid .panel-card { margin-bottom: 0; }
+
+.member-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    padding: 10px 2px;
+    min-height: 52px;
+}
+.member-row:first-child { border-top: 0; }
+.member-row:active { transform: none; background: var(--panel-2); }
+.member-name { flex: 1; font-weight: 600; }
+
+.avatar {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.swatches { border: 0; padding: 0; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+.swatches legend { color: var(--muted); font-size: 13px; font-weight: 560; padding: 0 0 8px; }
+.swatch { margin: 0; cursor: pointer; }
+.swatch input { position: absolute; opacity: 0; pointer-events: none; }
+.swatch-dot { display: block; width: 34px; height: 34px; border-radius: 50%; }
+.swatch input:checked + .swatch-dot { box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--text); }
+.swatch input:focus-visible + .swatch-dot { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+#place-results { margin-top: 6px; }
+
+@media (min-width: 900px) {
+    /* Two columns on a landscape iPad: the time and the weather side by side
+       at the top, the day's details beneath. */
+    .today-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+    /* The tallest card takes the right-hand column down two rows, so what
+       sits under the clock starts right under it instead of below the
+       forecast. */
+    .today-weather { grid-column: 2; grid-row: span 2; }
+    .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; margin-bottom: 14px; }
+    .segmented:not(.compact) { max-width: 460px; }
+}

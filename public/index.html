@@ -6,8 +6,8 @@
      indicator; the safe-area insets in the stylesheet put the content back
      where it can actually be read. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Meal Plan</title>
-<meta name="description" content="What the family is eating this week.">
+<title>Family Hub</title>
+<meta name="description" content="The family's week: plans, dinners and the weather.">
 
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
@@ -17,7 +17,7 @@
 <!-- iOS still reads these rather than the manifest for standalone mode. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Meal Plan">
+<meta name="apple-mobile-web-app-title" content="Family Hub">
 <meta name="theme-color" content="#0b1b3a">
 
 <!-- Last in the head, and not deferred: it puts the saved theme on the page
@@ -34,7 +34,7 @@
 <div id="gate" class="gate" hidden>
   <form id="gate-form" class="gate-card">
     <img class="gate-mark" src="icons/icon-192.png" alt="" width="54" height="54">
-    <h1>Meal Plan</h1>
+    <h1>Family Hub</h1>
     <p class="muted">Ask whoever set this up for the family password.</p>
     <label class="sr-only" for="gate-password">Password</label>
     <input id="gate-password" type="password" autocomplete="current-password" placeholder="Password" enterkeyhint="go">
@@ -67,8 +67,34 @@
   </header>
 
   <main>
+    <!-- ------------------------------------------------------ today view -->
+    <!-- What a family board is for: the time, the weather and what is
+         happening today, readable from across the kitchen. -->
+    <section id="view-today" class="view">
+      <div class="today-grid">
+        <article class="panel-card today-clock">
+          <div class="clock" id="today-time">--:--</div>
+          <div class="clock-date" id="today-date"></div>
+        </article>
+        <article class="panel-card today-weather" id="today-weather"></article>
+        <article class="panel-card today-dinner">
+          <h2 class="panel-label">Dinner</h2>
+          <div id="today-dinner"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- The Meals tab holds three things, switched here rather than given a
+         tab each: five tabs is all a phone's dock takes, and the plan, the
+         recipes and the shopping list are one job. -->
+    <div class="segmented" id="food-tabs" role="tablist" hidden>
+      <button type="button" role="tab" data-sub="plan">This week</button>
+      <button type="button" role="tab" data-sub="meals">Recipes</button>
+      <button type="button" role="tab" data-sub="shop">Shopping</button>
+    </div>
+
     <!-- ------------------------------------------------------- plan view -->
-    <section id="view-plan" class="view">
+    <section id="view-plan" class="view" hidden>
       <div class="actions">
         <button class="primary" id="btn-random">
           <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
@@ -101,18 +127,44 @@
       <div id="shop-list"></div>
     </section>
 
-    <!-- ----------------------------------------------------- themes view -->
-    <section id="view-themes" class="view" hidden>
-      <p class="hint">
-        Changes the whole app straight away. Saved on this device, so each
-        phone or iPad in the house can have its own.
-      </p>
+    <!-- --------------------------------------------------- settings view -->
+    <section id="view-settings" class="view" hidden>
+      <div class="settings-grid">
+        <article class="panel-card">
+          <div class="panel-head">
+            <h2>Family</h2>
+            <button type="button" class="ghost" id="btn-add-member">Add someone</button>
+          </div>
+          <p class="hint">Everyone gets a colour, so the calendar and the chores show whose is whose.</p>
+          <div id="member-list"></div>
+        </article>
 
-      <h2 class="theme-group-title">Colours</h2>
-      <div class="theme-grid" id="theme-grid-colour"></div>
+        <article class="panel-card">
+          <div class="panel-head"><h2>Weather</h2></div>
+          <p class="hint" id="weather-place"></p>
+          <form class="actions" id="place-form">
+            <input id="place-search" type="search" placeholder="Search for your town" enterkeyhint="search" autocomplete="off">
+            <button type="submit" class="ghost">Search</button>
+          </form>
+          <div id="place-results"></div>
+          <div class="segmented compact" id="units" role="radiogroup" aria-label="Temperature">
+            <button type="button" role="radio" data-units="fahrenheit">&deg;F</button>
+            <button type="button" role="radio" data-units="celsius">&deg;C</button>
+          </div>
+        </article>
+      </div>
 
-      <h2 class="theme-group-title">Holidays</h2>
-      <div class="theme-grid" id="theme-grid-holiday"></div>
+      <article class="panel-card">
+        <div class="panel-head"><h2>Themes</h2></div>
+        <p class="hint">
+          Changes the whole app straight away. Saved on this device, so each
+          phone or iPad in the house can have its own.
+        </p>
+        <h2 class="theme-group-title">Colours</h2>
+        <div class="theme-grid" id="theme-grid-colour"></div>
+        <h2 class="theme-group-title">Holidays</h2>
+        <div class="theme-grid" id="theme-grid-holiday"></div>
+      </article>
     </section>
   </main>
 
@@ -121,20 +173,17 @@
   <!-- Bottom bar rather than top tabs: this is a phone app, and the bottom of
        a 6.1" screen is the part a thumb reaches without re-gripping. -->
   <nav class="tabbar">
-    <button class="tab is-active" data-view="plan">
-      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18"/></svg><span>Plan</span>
+    <button class="tab is-active" data-view="today">
+      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg><span>Today</span>
     </button>
     <button class="tab" data-view="cal">
       <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg><span>Calendar</span>
     </button>
-    <button class="tab" data-view="meals">
-      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>Meals</span>
+    <button class="tab" data-view="food">
+      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 0 0 2 2v8M9 3v6M5 3v6M18 3c-1.7 0-3 2.2-3 5v4h3v9"/></svg><span>Meals</span>
     </button>
-    <button class="tab" data-view="shop">
-      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 8h13l-1.2 11.2a2 2 0 0 1-2 1.8H8.7a2 2 0 0 1-2-1.8z"/><path d="M9 8V5.5a3 3 0 0 1 6 0V8"/></svg><span>Shopping</span>
-    </button>
-    <button class="tab" data-view="themes">
-      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.4-4-8.2-9-8.2z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg><span>Themes</span>
+    <button class="tab" data-view="settings">
+      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.4-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span>
     </button>
   </nav>
 </div>
@@ -224,6 +273,28 @@
     <div class="sheet-actions">
       <span class="spacer"></span>
       <button class="primary" type="submit">Fill it in</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- -------------------------------------------------------- person sheet -->
+<dialog id="member-editor" aria-labelledby="member-title">
+  <form class="sheet" id="member-form" method="dialog">
+    <div class="sheet-head">
+      <h3 id="member-title">Add someone</h3>
+      <button class="dialog-close" id="member-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <label>Name
+      <input id="member-name" maxlength="40" placeholder="Emma" autocomplete="off" enterkeyhint="done">
+    </label>
+    <fieldset class="swatches" id="member-colours">
+      <legend>Colour</legend>
+    </fieldset>
+    <p class="error" id="member-error" hidden></p>
+    <div class="sheet-actions">
+      <button class="ghost danger" id="member-delete" type="button" hidden>Remove</button>
+      <span class="spacer"></span>
+      <button class="primary" type="submit">Save</button>
     </div>
   </form>
 </dialog>
