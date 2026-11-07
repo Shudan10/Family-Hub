@@ -35,6 +35,7 @@ import {
 import { loadMembers, MEMBER_COLOURS, normaliseMember, saveMembers } from './lib/family.js';
 import { loadEvents, normaliseEvent, occurrences, REPEATS, saveEvents, unassignMember as unassignFromEvents } from './lib/events.js';
 import { loadSettings, normaliseLocation, saveSettings, UNITS } from './lib/settings.js';
+import { loadTasks, markDone, normaliseTask, saveTasks, TASK_REPEATS, tasksOn, unassignMember as unassignFromTasks } from './lib/tasks.js';
 import { forecast, forgetForecast, searchPlaces } from './lib/weather.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -462,6 +463,79 @@ route('DELETE', /^\/api\/events\/([A-Za-z0-9_]+)$/, async (req, res, match, url)
     }
     events.splice(idx, 1);
     saveEvents(events);
+    sendJson(res, 200, { ok: true });
+});
+
+// ------------------------------------------------------------------ tasks --
+
+unassigners.push(unassignFromTasks);
+
+/*
+ * The day being looked at, and the asking device's today.
+ *
+ * Both from the page: what counts as late depends on the family's date, not
+ * on the server's, which keeps UTC.
+ */
+function taskDays(url) {
+    const date = url.searchParams.get('date');
+    const today = url.searchParams.get('today') || date;
+    if (!isIsoDate(date) || !isIsoDate(today)) throw new HttpError(400, 'Ask for a real date.');
+    return { date, today };
+}
+
+route('GET', /^\/api\/tasks$/, async (req, res, match, url) => {
+    const { date, today } = taskDays(url);
+    sendJson(res, 200, { date, today, tasks: tasksOn(loadTasks(), date, today), repeats: TASK_REPEATS });
+});
+
+route('GET', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const task = loadTasks().find((t) => t.id === match[1]);
+    if (!task) throw new HttpError(404, 'That chore is not on the list any more.');
+    sendJson(res, 200, { task });
+});
+
+route('POST', /^\/api\/tasks$/, async (req, res) => {
+    const body = await readBody(req);
+    const tasks = loadTasks();
+    const { task, errors } = normaliseTask(body, loadMembers().map((m) => m.id), null, tasks.length);
+    if (errors.length) throw new HttpError(400, errors[0]);
+    tasks.push(task);
+    saveTasks(tasks);
+    sendJson(res, 201, { task });
+});
+
+route('PUT', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const body = await readBody(req);
+    const tasks = loadTasks();
+    const idx = tasks.findIndex((t) => t.id === match[1]);
+    if (idx < 0) throw new HttpError(404, 'That chore is not on the list any more.');
+    const { task, errors } = normaliseTask(body, loadMembers().map((m) => m.id), tasks[idx]);
+    if (errors.length) throw new HttpError(400, errors[0]);
+    tasks[idx] = task;
+    saveTasks(tasks);
+    sendJson(res, 200, { task });
+});
+
+/* Ticks a chore off for a day, or unticks it. */
+route('POST', /^\/api\/tasks\/([A-Za-z0-9_]+)\/done$/, async (req, res, match) => {
+    const body = await readBody(req);
+    const date = String(body.date ?? '');
+    const today = String(body.today ?? date);
+    if (!isIsoDate(date) || !isIsoDate(today)) throw new HttpError(400, 'That is not a date.');
+    const tasks = loadTasks();
+    const task = tasks.find((t) => t.id === match[1]);
+    if (!task) throw new HttpError(404, 'That chore is not on the list any more.');
+    if (!markDone(task, date, body.done !== false, today)) throw new HttpError(400, 'That chore is not on that day.');
+    saveTasks(tasks);
+    sendJson(res, 200, { ok: true });
+});
+
+route('DELETE', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const tasks = loadTasks();
+    const idx = tasks.findIndex((t) => t.id === match[1]);
+    if (idx < 0) throw new HttpError(404, 'That chore is not on the list any more.');
+    tasks.splice(idx, 1);
+    saveTasks(tasks);
     sendJson(res, 200, { ok: true });
 });
 

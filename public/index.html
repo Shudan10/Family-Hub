@@ -94,8 +94,25 @@
             <h2 class="panel-label">Dinner</h2>
             <div id="today-dinner"></div>
           </article>
+          <article class="panel-card today-chores">
+            <div class="panel-head">
+              <h2 class="panel-label">Chores <span class="panel-count" id="today-chores-count"></span></h2>
+              <button type="button" class="ghost" id="btn-today-chores">All</button>
+            </div>
+            <div id="today-chores"></div>
+          </article>
         </div>
       </div>
+    </section>
+
+    <!-- ------------------------------------------------------ tasks view -->
+    <!-- The chore chart: a column for each person and one for anybody, for
+         the day the stepper is on. Tapping a chore ticks it; the pencil edits. -->
+    <section id="view-tasks" class="view" hidden>
+      <div class="actions tasks-actions">
+        <button class="primary" type="button" id="btn-add-task">Add a chore</button>
+      </div>
+      <div class="chore-board" id="chore-board"></div>
     </section>
 
     <!-- The Meals tab holds three things, switched here rather than given a
@@ -192,6 +209,9 @@
     </button>
     <button class="tab" data-view="cal">
       <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg><span>Calendar</span>
+    </button>
+    <button class="tab" data-view="tasks">
+      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12.5 2.8 2.8L16.5 9"/></svg><span>Tasks</span>
     </button>
     <button class="tab" data-view="food">
       <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 0 0 2 2v8M9 3v6M5 3v6M18 3c-1.7 0-3 2.2-3 5v4h3v9"/></svg><span>Meals</span>
@@ -341,6 +361,48 @@
     <div class="sheet-actions">
       <button class="ghost danger" id="ev-delete-one" type="button" hidden>Delete this day</button>
       <button class="ghost danger" id="ev-delete" type="button" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button class="primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- --------------------------------------------------------- chore sheet -->
+<dialog id="task-editor" aria-labelledby="task-heading">
+  <form class="sheet" id="task-form" method="dialog">
+    <div class="sheet-head">
+      <h3 id="task-heading">New chore</h3>
+      <button class="dialog-close" id="task-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <label>What
+      <input id="tk-title" maxlength="120" placeholder="Feed the dog" autocomplete="off" enterkeyhint="done">
+    </label>
+
+    <!-- One person or anybody: a chore with two owners is a chore neither does. -->
+    <fieldset class="who" id="tk-member">
+      <legend>Whose</legend>
+    </fieldset>
+
+    <div class="row">
+      <label>Repeats
+        <select id="tk-repeat">
+          <option value="none">Just once</option>
+          <option value="daily">Every day</option>
+          <option value="weekly">On some days</option>
+        </select>
+      </label>
+      <label><span id="tk-date-label">Due</span> <input id="tk-date" type="date"></label>
+    </div>
+
+    <fieldset class="weekdays" id="tk-days" hidden>
+      <legend>Which days</legend>
+    </fieldset>
+    <p class="hint" id="tk-date-hint">Leave the day empty and it waits on today's list until it is done.</p>
+
+    <p class="error" id="task-error" hidden></p>
+    <div class="sheet-actions">
+      <button class="ghost danger" id="tk-delete" type="button" hidden>Delete</button>
       <span class="spacer"></span>
       <button class="primary" type="submit">Save</button>
     </div>

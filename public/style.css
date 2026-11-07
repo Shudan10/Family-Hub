@@ -1095,6 +1095,7 @@ body::after {
 .today-weather { order: 2; }
 .today-events { order: 3; }
 .today-dinner { order: 4; }
+.today-chores { order: 5; }
 @media (min-width: 900px) {
     .today-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 }
@@ -1225,3 +1226,122 @@ body::after {
 }
 .who-chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .avatar.small { width: 24px; height: 24px; font-size: 12px; }
+
+/* --------------------------------------------------------------- chores -- */
+
+.tasks-actions { margin-bottom: 14px; }
+
+/* A column per person on a landscape iPad, side by side the way a chart on
+   the fridge is; one under another on a phone. */
+.chore-board { display: grid; gap: 14px; align-items: start; }
+.chore-board .panel-card { margin-bottom: 0; }
+/* One row of people, never a ragged second row under the tallest column: a
+   household of up to five fits across a landscape iPad, and a bigger one
+   scrolls sideways rather than wrapping. */
+@media (min-width: 700px) {
+    .chore-board {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(150px, 1fr);
+        gap: 12px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+    /* Five across leaves a column about 170px wide: the card's own padding
+       and the pencil give back what they can, so a name like "Call the
+       plumber" wraps between words rather than through them. */
+    .chore-col { padding: 14px 12px; }
+    .chore-col .chore-tick { gap: 9px; }
+    .chore-col .chore-box { width: 26px; height: 26px; }
+    .chore-col .chore-title { font-size: 15px; }
+    .chore-col .chore-edit { width: 30px; }
+    .chore-col .chore-name { font-size: 17px; }
+}
+
+.chore-col { border-top: 4px solid var(--who); }
+.chore-head { display: flex; align-items: center; gap: 10px; }
+.chore-name { flex: 1; min-width: 0; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chore-count { font-size: 14px; font-weight: 650; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chore-bar {
+    height: 6px;
+    margin: 12px 0 6px;
+    border-radius: 3px;
+    background: var(--panel-2);
+    overflow: hidden;
+}
+.chore-bar > span { display: block; height: 100%; background: var(--who); border-radius: 3px; transition: width 0.25s ease; }
+.chore-cheer { margin: 10px 0 0; font-weight: 650; text-align: center; }
+
+.avatar.anyone { background: var(--panel-2); color: var(--muted); }
+
+.chore { display: flex; align-items: center; border-top: 1px solid var(--line); }
+.chore-list .chore:first-child,
+#today-chores .chore:first-child { border-top: 0; }
+.chore-tick {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 10px 2px;
+    min-height: 56px;
+    color: var(--text);
+}
+.chore-tick:active { transform: none; background: var(--panel-2); }
+.chore-box {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2.5px solid var(--who);
+    display: grid;
+    place-items: center;
+    transition: background 0.15s ease;
+}
+.chore.is-done .chore-box { background: var(--who); }
+.chore.is-done .chore-box::after {
+    content: '';
+    width: 7px;
+    height: 13px;
+    margin-top: -3px;
+    border: solid var(--panel);
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+.chore-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.chore-title { font-weight: 620; font-size: 16px; overflow-wrap: break-word; hyphens: auto; }
+.chore.is-done .chore-title { text-decoration: line-through; color: var(--muted); }
+.chore-when { font-size: 12.5px; color: var(--muted); }
+.chore.is-late .chore-when { color: var(--danger); font-weight: 600; }
+.chore-edit {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font-size: 17px;
+}
+.panel-count { font-weight: 600; letter-spacing: 0; text-transform: none; margin-left: 4px; }
+
+/* The days of the week in the chore sheet: seven toggles in a row. */
+.weekdays { border: 0; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.weekdays legend { color: var(--muted); font-size: 13px; font-weight: 560; padding: 0 0 7px; }
+.day-chip { margin: 0; cursor: pointer; }
+.day-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.day-chip span {
+    display: grid;
+    place-items: center;
+    min-height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
+.day-chip input:checked + span { background: var(--btn-top); border-color: var(--btn-bottom); color: var(--on-primary); }
+.day-chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }

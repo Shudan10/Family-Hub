@@ -31,6 +31,7 @@ const state = {
     // that can drift apart.
     calScope: 'month',
     calDays: [], // the month grid's days, as the server has them
+    taskDay: null, // the day the chore chart is showing, as YYYY-MM-DD
     picking: null, // { date, slot } while the picker is open
     editing: null, // the meal being edited, or null for a new one
 };
@@ -122,6 +123,7 @@ const fmtDayShort = (iso) => parseIso(iso).toLocaleDateString(undefined, { day: 
 
 /** What the stepper reads for a view: a month on the calendar, a week elsewhere. */
 function stepperLabel(view) {
+    if (view === 'tasks') return fmtTaskDay(state.taskDay);
     if (view !== 'cal') return fmtWeekLabel(state.weekStart);
     return state.calScope === 'week'
         ? fmtWeekLabel(state.weekStart)
@@ -226,6 +228,7 @@ async function signIn(event) {
 const VIEWS = {
     today: { tab: 'today', title: 'Today' },
     cal: { tab: 'cal', title: 'Calendar', stepped: true },
+    tasks: { tab: 'tasks', title: 'Tasks', stepped: true },
     plan: { tab: 'food', title: 'Meals', stepped: true },
     meals: { tab: 'food', title: 'Meals' },
     shop: { tab: 'food', title: 'Meals', stepped: true },
@@ -276,6 +279,10 @@ function setView(requested) {
     if (view === 'shop') loadShopping();
     if (view === 'settings') renderSettings();
     if (view === 'cal') loadCalendar().catch((e) => toast(e.message));
+    if (view === 'tasks') {
+        showTaskDay();
+        loadChores();
+    }
     // Coming back to the plan from the calendar, where a day may have been
     // changed: the week on screen could be out of date.
     if (view === 'plan') loadWeek().catch(() => {});
@@ -1043,6 +1050,306 @@ async function loadTodayEvents() {
     }
 }
 
+// ------------------------------------------------------------------ tasks --
+
+/* A weekday's name from its number, 0 for Sunday. 1 November 2026 was one. */
+const dayName = (i, weekday = 'short') => new Date(2026, 10, 1 + i).toLocaleDateString(undefined, { weekday });
+
+/** The days of the week in the order the calendar shows them. */
+const weekOrder = () => Array.from({ length: 7 }, (_, k) => (WEEK_STARTS_ON + k) % 7);
+
+function addDays(iso, n) {
+    const d = parseIso(iso);
+    d.setDate(d.getDate() + n);
+    return isoDate(d);
+}
+
+/** "Today", "Tomorrow", or the day itself, for the stepper over the chart. */
+function fmtTaskDay(iso) {
+    const today = isoDate(new Date());
+    if (iso === today) return 'Today';
+    if (iso === addDays(today, 1)) return 'Tomorrow';
+    if (iso === addDays(today, -1)) return 'Yesterday';
+    return parseIso(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+/** The small line under a chore: how often, or how late. */
+function choreWhen(t) {
+    if (t.overdue) return `Late · was due ${fmtDayShort(t.date)}`;
+    if (t.repeat === 'daily') return 'Every day';
+    if (t.repeat === 'weekly') {
+        const d = t.days.join();
+        if (d === '0,1,2,3,4,5,6') return 'Every day';
+        if (d === '1,2,3,4,5') return 'Weekdays';
+        if (d === '0,6') return 'Weekends';
+        if (t.days.length === 1) return `Every ${dayName(t.days[0], 'long')}`;
+        return weekOrder().filter((i) => t.days.includes(i)).map((i) => dayName(i)).join(', ');
+    }
+    return '';
+}
+
+/* Somebody's colour, or a neutral one for a chore that is anybody's. */
+const choreColour = (t) => memberById(t.member)?.colour ?? 'var(--muted)';
+
+const anyoneAvatar = (className = 'avatar') => {
+    const a = el('span', `${className} anyone`, '★');
+    a.setAttribute('aria-hidden', 'true');
+    return a;
+};
+
+/**
+ * One chore: a big tick target, and a pencil beside it.
+ *
+ * The tick is the whole row, because ticking is what a chart is used for many
+ * times a day -- a small eight-year-old's finger should not have to find a
+ * checkbox. Editing is the rare thing and gets the small button.
+ */
+function choreRow(t, day, { owner = false } = {}) {
+    const row = el('div', `chore${t.done ? ' is-done' : ''}${t.overdue ? ' is-late' : ''}`);
+    row.style.setProperty('--who', choreColour(t));
+
+    const tick = el('button', 'chore-tick');
+    tick.type = 'button';
+    tick.dataset.task = t.id;
+    tick.dataset.date = day;
+    tick.setAttribute('aria-pressed', String(t.done));
+    tick.append(el('span', 'chore-box'));
+    if (owner) {
+        const m = memberById(t.member);
+        tick.append(m ? avatar(m, 'avatar small') : anyoneAvatar('avatar small'));
+    }
+    const text = el('span', 'chore-text');
+    text.append(el('span', 'chore-title', t.title));
+    const when = choreWhen(t);
+    if (when) text.append(el('span', 'chore-when', when));
+    tick.append(text);
+
+    const edit = el('button', 'chore-edit', '✎');
+    edit.type = 'button';
+    edit.dataset.edit = t.id;
+    edit.setAttribute('aria-label', `Edit ${t.title}`);
+    row.append(tick, edit);
+    return row;
+}
+
+/** The stepper over the chart, and the way back to today when it is elsewhere. */
+function showTaskDay() {
+    $('week-label').textContent = stepperLabel('tasks');
+    $('btn-today').hidden = state.taskDay === isoDate(new Date());
+}
+
+const fetchChores = async (day) =>
+    (await api(`/api/tasks?date=${day}&today=${isoDate(new Date())}`)).tasks;
+
+async function loadChores() {
+    const day = state.taskDay;
+    let tasks;
+    try {
+        tasks = await fetchChores(day);
+    } catch (e) {
+        return toast(e.message);
+    }
+    // Stepped on, or left, while this was on its way.
+    if (state.view !== 'tasks' || state.taskDay !== day) return;
+
+    const columns = state.members.map((m) => ({ member: m, tasks: tasks.filter((t) => t.member === m.id) }));
+    const anyone = tasks.filter((t) => !memberById(t.member));
+    if (anyone.length || !state.members.length) columns.push({ member: null, tasks: anyone });
+    $('chore-board').replaceChildren(...columns.map((c) => choreColumn(c, day)));
+}
+
+function choreColumn({ member, tasks }, day) {
+    const col = el('article', 'panel-card chore-col');
+    col.style.setProperty('--who', member?.colour ?? 'var(--muted)');
+
+    const done = tasks.filter((t) => t.done).length;
+    const head = el('div', 'chore-head');
+    head.append(
+        member ? avatar(member) : anyoneAvatar(),
+        el('h2', 'chore-name', member?.name ?? 'Anyone'),
+        el('span', 'chore-count', tasks.length ? `${done}/${tasks.length}` : ''),
+    );
+    const bar = el('div', 'chore-bar');
+    const fill = el('span');
+    fill.style.width = tasks.length ? `${(done / tasks.length) * 100}%` : '0';
+    bar.append(fill);
+
+    const list = el('div', 'chore-list');
+    if (!tasks.length) list.append(el('p', 'hint', day === isoDate(new Date()) ? 'Nothing today.' : 'Nothing this day.'));
+    else list.append(...tasks.map((t) => choreRow(t, day)));
+    if (tasks.length && done === tasks.length) list.append(el('p', 'chore-cheer', 'All done 🎉'));
+
+    col.append(head, bar, list);
+    return col;
+}
+
+async function loadTodayChores() {
+    const host = $('today-chores');
+    const today = isoDate(new Date());
+    let tasks;
+    try {
+        tasks = await fetchChores(today);
+    } catch {
+        $('today-chores-count').textContent = '';
+        return host.replaceChildren(el('p', 'hint', 'The chores could not be loaded.'));
+    }
+    const done = tasks.filter((t) => t.done).length;
+    $('today-chores-count').textContent = tasks.length ? `${done} of ${tasks.length}` : '';
+    host.replaceChildren(
+        ...(tasks.length
+            ? tasks.map((t) => choreRow(t, today, { owner: true }))
+            : [el('p', 'hint', 'No chores today.')]),
+    );
+}
+
+/** Whatever is on screen that shows chores, read again. */
+async function refreshChores() {
+    if (state.view === 'tasks') await loadChores();
+    if (state.view === 'today') await loadTodayChores();
+}
+
+/*
+ * Ticked on screen at once, then told to the server.
+ *
+ * Waiting for the round trip before the box fills makes a child tap it twice,
+ * which unticks it.
+ */
+async function toggleChore(tick) {
+    const row = tick.closest('.chore');
+    const done = !row.classList.contains('is-done');
+    row.classList.toggle('is-done', done);
+    tick.setAttribute('aria-pressed', String(done));
+    try {
+        await api(`/api/tasks/${tick.dataset.task}/done`, {
+            method: 'POST',
+            body: { date: tick.dataset.date, today: isoDate(new Date()), done },
+        });
+    } catch (e) {
+        toast(e.message);
+    }
+    await refreshChores();
+}
+
+function onChoreClick(e) {
+    const edit = e.target.closest('.chore-edit');
+    if (edit) return openTaskEditor(edit.dataset.edit);
+    const tick = e.target.closest('.chore-tick');
+    if (tick) toggleChore(tick);
+}
+
+let editingTask = null;
+
+function taskFieldsShown() {
+    const repeat = $('tk-repeat').value;
+    $('tk-days').hidden = repeat !== 'weekly';
+    $('tk-date-label').textContent = repeat === 'none' ? 'Due' : 'Starting';
+    $('tk-date-hint').hidden = repeat !== 'none';
+}
+
+async function openTaskEditor(id, { date } = {}) {
+    let task = null;
+    if (id) {
+        try {
+            ({ task } = await api(`/api/tasks/${id}`));
+        } catch (e) {
+            return toast(e.message);
+        }
+    }
+    editingTask = task;
+
+    $('task-heading').textContent = task ? 'Edit chore' : 'New chore';
+    $('task-error').hidden = true;
+    $('tk-title').value = task?.title ?? '';
+    $('tk-repeat').value = task?.repeat ?? 'none';
+    // A new chore added while looking at today waits on today's list with no
+    // day of its own; one added while looking at another day is due that day.
+    $('tk-date').value = task ? task.date ?? '' : date && date !== isoDate(new Date()) ? date : '';
+
+    // Whose: one person, or anybody.
+    const who = $('tk-member');
+    who.querySelectorAll('label').forEach((n) => n.remove());
+    const current = task && memberById(task.member) ? task.member : '';
+    for (const m of [null, ...state.members]) {
+        const label = el('label', 'who-chip');
+        label.style.setProperty('--who', m?.colour ?? 'var(--muted)');
+        const input = el('input');
+        input.type = 'radio';
+        input.name = 'tk-member';
+        input.value = m?.id ?? '';
+        input.checked = input.value === current;
+        label.append(input, m ? avatar(m, 'avatar small') : anyoneAvatar('avatar small'), el('span', null, m?.name ?? 'Anyone'));
+        who.append(label);
+    }
+
+    const days = $('tk-days');
+    days.querySelectorAll('label').forEach((n) => n.remove());
+    for (const i of weekOrder()) {
+        const label = el('label', 'day-chip');
+        const input = el('input');
+        input.type = 'checkbox';
+        input.value = String(i);
+        input.checked = task?.days?.includes(i) ?? false;
+        label.append(input, el('span', null, dayName(i)));
+        days.append(label);
+    }
+
+    $('tk-delete').hidden = !task;
+    taskFieldsShown();
+    $('task-editor').showModal();
+    if (!task) $('tk-title').focus();
+}
+
+async function saveTask(e) {
+    e.preventDefault();
+    const err = $('task-error');
+    err.hidden = true;
+    const body = {
+        title: $('tk-title').value,
+        member: $('tk-member').querySelector('input:checked')?.value || null,
+        repeat: $('tk-repeat').value,
+        days: [...$('tk-days').querySelectorAll('input:checked')].map((i) => Number(i.value)),
+        date: $('tk-date').value,
+    };
+    // A repeating chore with no start would also come up on every day before
+    // it was made, looking undone, all the way back.
+    if (body.repeat !== 'none' && !body.date) body.date = isoDate(new Date());
+    if (body.repeat === 'weekly' && !body.days.length) {
+        err.textContent = 'Pick the days it happens.';
+        err.hidden = false;
+        return;
+    }
+    try {
+        if (editingTask) await api(`/api/tasks/${editingTask.id}`, { method: 'PUT', body });
+        else await api('/api/tasks', { method: 'POST', body });
+        $('task-editor').close();
+        await refreshChores();
+        toast(editingTask ? 'Saved' : 'Added');
+    } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+    }
+}
+
+async function deleteTask() {
+    const task = editingTask;
+    if (!task) return;
+    const sure = await askConfirm({
+        title: `Delete ${task.title}?`,
+        body: task.repeat === 'none' ? 'It comes off the list.' : 'It comes off every day it repeats, and the record of when it was done goes with it.',
+        confirmLabel: 'Delete',
+        danger: true,
+    });
+    if (!sure) return;
+    try {
+        await api(`/api/tasks/${task.id}`, { method: 'DELETE' });
+        $('task-editor').close();
+        await refreshChores();
+        toast('Deleted');
+    } catch (ex) {
+        toast(ex.message);
+    }
+}
+
 // ------------------------------------------------------------------ today --
 
 /*
@@ -1102,7 +1409,7 @@ async function loadToday() {
     todayRefresh = setInterval(() => {
         if (state.view === 'today' && !document.hidden) loadToday();
     }, 5 * 60_000);
-    await Promise.all([loadTodayWeather(), loadTodayDinner(), loadTodayEvents()]);
+    await Promise.all([loadTodayWeather(), loadTodayDinner(), loadTodayEvents(), loadTodayChores()]);
 }
 
 async function loadTodayWeather() {
@@ -1462,6 +1769,12 @@ function chooseTheme(id) {
 
 /** Steps whichever period the current view is showing. */
 function step(dir) {
+    if (state.view === 'tasks') {
+        state.taskDay = addDays(state.taskDay, dir);
+        showTaskDay();
+        loadChores();
+        return;
+    }
     if (state.view === 'cal') {
         if (state.calScope === 'week') {
             const nextWeek = new Date(state.weekStart);
@@ -1493,6 +1806,20 @@ for (const tab of document.querySelectorAll('.tab')) {
 for (const b of document.querySelectorAll('#food-tabs [data-sub]')) {
     b.addEventListener('click', () => setView(b.dataset.sub));
 }
+
+// --- tasks ---
+$('chore-board').addEventListener('click', onChoreClick);
+$('today-chores').addEventListener('click', onChoreClick);
+$('btn-today-chores').addEventListener('click', () => {
+    state.taskDay = isoDate(new Date());
+    setView('tasks');
+});
+$('btn-add-task').addEventListener('click', () => openTaskEditor(null, { date: state.taskDay }));
+$('task-form').addEventListener('submit', saveTask);
+$('task-close').addEventListener('click', () => $('task-editor').close());
+$('tk-repeat').addEventListener('change', taskFieldsShown);
+$('tk-days').addEventListener('change', () => { $('task-error').hidden = true; });
+$('tk-delete').addEventListener('click', deleteTask);
 
 // --- settings: family and weather ---
 $('btn-add-member').addEventListener('click', () => openMemberEditor(null));
@@ -1547,6 +1874,12 @@ $('btn-today').addEventListener('click', () => {
         state.weekStart = weekStart(new Date());
         $('btn-today').textContent = state.calScope === 'month' ? 'Week view' : 'Month view';
         loadCalendar().catch((e) => toast(e.message));
+        return;
+    }
+    if (state.view === 'tasks') {
+        state.taskDay = isoDate(new Date());
+        showTaskDay();
+        loadChores();
         return;
     }
     state.weekStart = weekStart(new Date());
@@ -1614,6 +1947,7 @@ $('randomer-close').addEventListener('click', () => $('randomer').close());
 (async function boot() {
     state.weekStart = weekStart(new Date());
     state.monthStart = monthStart(new Date());
+    state.taskDay = isoDate(new Date());
     try {
         const session = await fetch('/api/session').then((r) => r.json());
         if (session.passwordUnusable) {
