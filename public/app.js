@@ -1489,6 +1489,7 @@ async function loadTodayDinner() {
 function renderSettings() {
     renderMembers();
     renderWeatherSettings();
+    renderFeedSettings();
     renderThemes();
 }
 
@@ -1673,6 +1674,101 @@ async function chooseUnits(units) {
     }
 }
 
+// ----------------------------------------------------------- iPhone feed --
+
+const feedPath = (token) => `/api/feed/${token}.ics`;
+
+/*
+ * Whether this page was opened at a home-network address.
+ *
+ * The link is made from the address the page is open at, so a link made at
+ * 192.168.x.x only works where that address does: on the home Wi-Fi.
+ */
+function localOnly(hostname) {
+    return /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.startsWith('[') ||
+        hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.localhost') || !hostname.includes('.');
+}
+
+function renderFeedSettings() {
+    const settings = state.settings ?? {};
+    const token = settings.feedToken;
+    $('feed-off').hidden = Boolean(token);
+    $('feed-on').hidden = !token;
+    if (!token) return;
+
+    // webcal: is what makes the phone offer to subscribe, rather than import
+    // the events once and never hear about them again.
+    const webcal = `webcal://${location.host}${feedPath(token)}`;
+    $('feed-url').value = `${location.origin}${feedPath(token)}`;
+    try {
+        $('feed-qr').innerHTML = window.QR.toSvg(webcal);
+    } catch {
+        $('feed-qr').replaceChildren(el('p', 'hint', 'The link is too long for a code. Use the link below instead.'));
+    }
+
+    const local = localOnly(location.hostname);
+    $('feed-local').hidden = !local;
+    if (local) {
+        $('feed-local').textContent =
+            `This link uses the home address ${location.host}, so the iPhone only updates it on your home Wi-Fi; ` +
+            'away from home it keeps what it last saw. To have it update anywhere, open Family Hub at its public ' +
+            'address and make the link there.';
+    }
+    $('feed-chores').checked = settings.feedChores !== false;
+    $('feed-dinners').checked = settings.feedDinners === true;
+}
+
+async function feedRequest(method, path, body) {
+    try {
+        const { settings } = await api(path, { method, body });
+        state.settings = settings;
+        renderFeedSettings();
+        return true;
+    } catch (e) {
+        toast(e.message);
+        return false;
+    }
+}
+
+async function newFeedLink() {
+    if (state.settings?.feedToken) {
+        const sure = await askConfirm({
+            title: 'Make a new link?',
+            body: 'The old one stops working. Any phone that subscribed to it stops updating until it is given the new one.',
+            confirmLabel: 'New link',
+        });
+        if (!sure) return;
+    }
+    if (await feedRequest('POST', '/api/feed')) toast('Link ready');
+}
+
+async function turnFeedOff() {
+    const sure = await askConfirm({
+        title: 'Turn off the iPhone link?',
+        body: 'Phones that subscribed stop getting updates. Nothing in Family Hub is deleted.',
+        confirmLabel: 'Turn off',
+        danger: true,
+    });
+    if (sure && (await feedRequest('DELETE', '/api/feed'))) toast('Link turned off');
+}
+
+/*
+ * Copied with the clipboard where the browser allows it, which is only on
+ * https or localhost; at a home address over plain http it falls back to
+ * selecting the text so a long press can copy it.
+ */
+async function copyFeedLink() {
+    const input = $('feed-url');
+    try {
+        await navigator.clipboard.writeText(input.value);
+        toast('Copied');
+    } catch {
+        input.focus();
+        input.select();
+        toast(document.execCommand?.('copy') ? 'Copied' : 'Selected: copy it from the menu');
+    }
+}
+
 // --------------------------------------------------------------- themes ----
 
 /*
@@ -1820,6 +1916,14 @@ $('task-close').addEventListener('click', () => $('task-editor').close());
 $('tk-repeat').addEventListener('change', taskFieldsShown);
 $('tk-days').addEventListener('change', () => { $('task-error').hidden = true; });
 $('tk-delete').addEventListener('click', deleteTask);
+
+// --- settings: the iPhone link ---
+$('btn-feed-on').addEventListener('click', newFeedLink);
+$('btn-feed-new').addEventListener('click', newFeedLink);
+$('btn-feed-off').addEventListener('click', turnFeedOff);
+$('btn-feed-copy').addEventListener('click', copyFeedLink);
+$('feed-chores').addEventListener('change', (e) => feedRequest('PUT', '/api/settings', { feedChores: e.target.checked }));
+$('feed-dinners').addEventListener('change', (e) => feedRequest('PUT', '/api/settings', { feedDinners: e.target.checked }));
 
 // --- settings: family and weather ---
 $('btn-add-member').addEventListener('click', () => openMemberEditor(null));

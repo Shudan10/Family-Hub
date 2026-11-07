@@ -183,6 +183,44 @@
             <button type="button" role="radio" data-units="celsius">&deg;C</button>
           </div>
         </article>
+
+        <!-- The family calendar on a phone, as a subscribed calendar: the
+             phone reads it, and things are still added here. -->
+        <article class="panel-card" id="feed-card">
+          <div class="panel-head"><h2>On your iPhone</h2></div>
+          <p class="hint">
+            Puts the family calendar in the iPhone's Calendar app, next to your
+            own, and keeps it up to date. It is read only there: things are
+            still added here.
+          </p>
+          <div id="feed-off">
+            <button type="button" class="primary" id="btn-feed-on">Make a calendar link</button>
+          </div>
+          <div id="feed-on" hidden>
+            <div class="feed-qr" id="feed-qr"></div>
+            <ol class="feed-steps">
+              <li>Point the iPhone's camera at the code and tap the link.</li>
+              <li>Tap <b>Subscribe</b>, then <b>Add</b>.</li>
+            </ol>
+            <p class="hint">
+              Or by hand: Settings &rarr; Apps &rarr; Calendar &rarr; Calendar
+              Accounts &rarr; Add Account &rarr; Other &rarr; Add Subscribed
+              Calendar, and paste this.
+            </p>
+            <div class="actions feed-link">
+              <input id="feed-url" readonly aria-label="Calendar link">
+              <button type="button" class="ghost" id="btn-feed-copy">Copy</button>
+            </div>
+            <p class="hint feed-local" id="feed-local" hidden></p>
+            <p class="sheet-label">Also put on the phone</p>
+            <label class="check"><input type="checkbox" id="feed-chores"> Chores with a due day</label>
+            <label class="check"><input type="checkbox" id="feed-dinners"> Dinners</label>
+            <div class="actions">
+              <button type="button" class="ghost" id="btn-feed-new">New link</button>
+              <button type="button" class="ghost danger" id="btn-feed-off">Turn off</button>
+            </div>
+          </div>
+        </article>
       </div>
 
       <article class="panel-card">
@@ -449,6 +487,7 @@
 
 <div id="toast" class="toast" hidden></div>
 
+<script src="qr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

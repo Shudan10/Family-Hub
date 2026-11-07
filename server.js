@@ -32,6 +32,7 @@ import {
     shoppingList,
     SLOTS,
 } from './lib/store.js';
+import { buildCalendar, newFeedToken, tokenMatches } from './lib/feed.js';
 import { loadMembers, MEMBER_COLOURS, normaliseMember, saveMembers } from './lib/family.js';
 import { loadEvents, normaliseEvent, occurrences, REPEATS, saveEvents, unassignMember as unassignFromEvents } from './lib/events.js';
 import { loadSettings, normaliseLocation, saveSettings, UNITS } from './lib/settings.js';
@@ -539,6 +540,52 @@ route('DELETE', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     sendJson(res, 200, { ok: true });
 });
 
+// ------------------------------------------------------------ iPhone feed --
+
+/* Makes the calendar link, or a new one -- which is also how an old one that
+   got passed around is shut off. */
+route('POST', /^\/api\/feed$/, async (req, res) => {
+    sendJson(res, 200, { settings: saveSettings({ feedToken: newFeedToken() }) });
+});
+
+route('DELETE', /^\/api\/feed$/, async (req, res) => {
+    sendJson(res, 200, { settings: saveSettings({ feedToken: null }) });
+});
+
+/*
+ * The calendar itself, for phones.
+ *
+ * Outside the password, because the Calendar app cannot sign in: the token in
+ * the address is what lets it in. A wrong or switched-off one is a plain 404,
+ * the same as a page that was never there, so guessing learns nothing.
+ */
+route(
+    'GET',
+    /^\/api\/feed\/([A-Za-z0-9_-]{16,64})\.ics$/,
+    async (req, res, match) => {
+        const settings = loadSettings();
+        if (!tokenMatches(settings.feedToken, match[1])) return fail(res, 404, 'Not found');
+        const body = buildCalendar({
+            events: loadEvents(),
+            members: loadMembers(),
+            plan: settings.feedDinners ? loadPlan() : {},
+            meals: settings.feedDinners ? loadMeals() : [],
+            tasks: settings.feedChores ? loadTasks() : [],
+            include: { dinners: settings.feedDinners, chores: settings.feedChores },
+            today: isoDate(new Date()),
+        });
+        res.writeHead(200, {
+            'Content-Type': 'text/calendar; charset=utf-8',
+            'Content-Disposition': 'inline; filename="family-hub.ics"',
+            'Cache-Control': 'no-store',
+            // The address is the key; it should not travel on in a Referer.
+            'Referrer-Policy': 'no-referrer',
+        });
+        res.end(body);
+    },
+    { auth: false },
+);
+
 // --------------------------------------------------------------- settings --
 
 route('GET', /^\/api\/settings$/, async (req, res) => sendJson(res, 200, { settings: loadSettings(), units: UNITS }));
@@ -558,6 +605,9 @@ route('PUT', /^\/api\/settings$/, async (req, res) => {
             if (!location) throw new HttpError(400, 'That is not a place this can find the weather for.');
             next.location = location;
         }
+    }
+    for (const key of ['feedDinners', 'feedChores']) {
+        if (key in body) next[key] = body[key] === true;
     }
     const settings = saveSettings(next);
     forgetForecast();
