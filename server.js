@@ -33,6 +33,7 @@ import {
     SLOTS,
 } from './lib/store.js';
 import { loadMembers, MEMBER_COLOURS, normaliseMember, saveMembers } from './lib/family.js';
+import { loadEvents, normaliseEvent, occurrences, REPEATS, saveEvents, unassignMember as unassignFromEvents } from './lib/events.js';
 import { loadSettings, normaliseLocation, saveSettings, UNITS } from './lib/settings.js';
 import { forecast, forgetForecast, searchPlaces } from './lib/weather.js';
 
@@ -391,6 +392,78 @@ const unassigners = [];
 function unassignEverywhere(memberId) {
     for (const fn of unassigners) fn(memberId);
 }
+
+// ----------------------------------------------------------------- events --
+
+unassigners.push(unassignFromEvents);
+
+/** A from/to pair off the query string, both real dates and the right way round. */
+function eventRange(url) {
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    if (!isIsoDate(from) || !isIsoDate(to) || to < from) throw new HttpError(400, 'Ask for a range of real dates.');
+    if (dateRange(from, to).length >= 120) throw new HttpError(400, 'Ask for at most 120 days at a time.');
+    return { from, to };
+}
+
+route('GET', /^\/api\/events$/, async (req, res, match, url) => {
+    const { from, to } = eventRange(url);
+    sendJson(res, 200, { from, to, occurrences: occurrences(loadEvents(), from, to), repeats: REPEATS });
+});
+
+route('GET', /^\/api\/events\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const event = loadEvents().find((e) => e.id === match[1]);
+    if (!event) throw new HttpError(404, 'That event is not on the calendar any more.');
+    sendJson(res, 200, { event });
+});
+
+route('POST', /^\/api\/events$/, async (req, res) => {
+    const body = await readBody(req);
+    const events = loadEvents();
+    const { event, errors } = normaliseEvent(body, loadMembers().map((m) => m.id), null, events.length);
+    if (errors.length) throw new HttpError(400, errors[0]);
+    events.push(event);
+    saveEvents(events);
+    sendJson(res, 201, { event });
+});
+
+route('PUT', /^\/api\/events\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
+    const body = await readBody(req);
+    const events = loadEvents();
+    const idx = events.findIndex((e) => e.id === match[1]);
+    if (idx < 0) throw new HttpError(404, 'That event is not on the calendar any more.');
+    const { event, errors } = normaliseEvent(body, loadMembers().map((m) => m.id), events[idx]);
+    if (errors.length) throw new HttpError(400, errors[0]);
+    events[idx] = event;
+    saveEvents(events);
+    sendJson(res, 200, { event });
+});
+
+/*
+ * Delete the whole event, or -- for one that repeats -- just one day of it.
+ *
+ * "Just this one" adds the day to the series' skip list rather than splitting
+ * the series in two, so the rest of it is still one thing to edit.
+ */
+route('DELETE', /^\/api\/events\/([A-Za-z0-9_]+)$/, async (req, res, match, url) => {
+    const only = url.searchParams.get('occurrence');
+    const events = loadEvents();
+    const idx = events.findIndex((e) => e.id === match[1]);
+    if (idx < 0) throw new HttpError(404, 'That event is not on the calendar any more.');
+    const event = events[idx];
+
+    if (only) {
+        if (event.repeat === 'none') throw new HttpError(400, 'That event does not repeat, so there is only the one.');
+        if (!isIsoDate(only)) throw new HttpError(400, 'That is not a date.');
+        event.skip = [...new Set([...(event.skip ?? []), only])].sort();
+        event.updatedAt = new Date().toISOString();
+        saveEvents(events);
+        return sendJson(res, 200, { ok: true, skipped: only });
+    }
+    events.splice(idx, 1);
+    saveEvents(events);
+    sendJson(res, 200, { ok: true });
+});
 
 // --------------------------------------------------------------- settings --
 

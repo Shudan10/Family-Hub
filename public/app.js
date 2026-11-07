@@ -452,6 +452,17 @@ function renderCalendar() {
             : String(date.getDate());
         cell.append(num);
 
+        // Events first: a day reads "what is happening" before "what is for
+        // dinner". A month cell has room for three before it says how many more.
+        const events = state.calEvents?.get(day.date) ?? [];
+        if (events.length) {
+            const list = el('span', 'cal-events');
+            const shown = week ? events : events.slice(0, 3);
+            for (const o of shown) list.append(eventChip(o, { compact: !week }));
+            if (shown.length < events.length) list.append(el('span', 'cal-more', `+${events.length - shown.length} more`));
+            cell.append(list);
+        }
+
         const meals = document.createElement('span');
         meals.className = 'cal-meals';
         for (const slot of SLOTS) {
@@ -470,7 +481,7 @@ function renderCalendar() {
             row.title = `${SLOT_LABELS[slot]}: ${meal.name}`;
             meals.append(row);
         }
-        if (week && !meals.childElementCount) {
+        if (week && !meals.childElementCount && !events.length) {
             const none = document.createElement('span');
             none.className = 'cal-empty';
             none.textContent = 'Nothing planned';
@@ -484,8 +495,10 @@ function renderCalendar() {
 
 async function loadCalendar() {
     const dates = state.calScope === 'week' ? weekDates(state.weekStart) : monthGrid(state.monthStart);
-    const { days } = await api(`/api/plan?from=${dates[0]}&to=${dates[dates.length - 1]}`);
+    const range = `from=${dates[0]}&to=${dates[dates.length - 1]}`;
+    const [{ days }, { occurrences }] = await Promise.all([api(`/api/plan?${range}`), api(`/api/events?${range}`)]);
     state.calDays = days;
+    state.calEvents = groupByDate(occurrences);
     $('week-label').textContent = stepperLabel('cal');
     renderCalendar();
 }
@@ -493,6 +506,11 @@ async function loadCalendar() {
 /** The full names for one date, and a way to change any of them. */
 function openDay(date) {
     const day = state.calDays.find((d) => d.date === date);
+    state.dayOpen = date;
+    const events = state.calEvents?.get(date) ?? [];
+    $('day-events').replaceChildren(
+        ...(events.length ? events.map((o) => eventRow(o)) : [el('p', 'hint', 'Nothing on this day.')]),
+    );
     $('day-title').textContent = parseIso(date).toLocaleDateString(undefined, {
         weekday: 'long',
         day: 'numeric',
@@ -810,6 +828,221 @@ async function clearWeek() {
     }
 }
 
+// ----------------------------------------------------------------- events --
+
+/** Occurrences keyed by the day they fall on, for drawing a grid. */
+function groupByDate(list) {
+    const map = new Map();
+    for (const o of list) {
+        if (!map.has(o.date)) map.set(o.date, []);
+        map.get(o.date).push(o);
+    }
+    return map;
+}
+
+/** "10 AM", "3:15 PM" -- the minutes only when there are some. */
+function fmtTime(hhmm) {
+    if (!hhmm) return '';
+    const [h, m] = hhmm.split(':').map(Number);
+    const d = new Date(2000, 0, 1, h, m);
+    return d.toLocaleTimeString(undefined, m ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric' });
+}
+
+function whenText(o) {
+    if (o.allDay) return 'All day';
+    return o.end ? `${fmtTime(o.start)} – ${fmtTime(o.end)}` : fmtTime(o.start);
+}
+
+/* The colour an event is drawn in: its first person's, or a neutral one for an
+   event that is everybody's. */
+const eventColour = (o) => memberById(o.members?.[0])?.colour ?? 'var(--muted)';
+
+function memberDots(ids) {
+    const wrap = el('span', 'member-dots');
+    for (const id of ids ?? []) {
+        const m = memberById(id);
+        if (!m) continue;
+        const dot = el('span', 'member-dot');
+        dot.style.background = m.colour;
+        dot.title = m.name;
+        wrap.append(dot);
+    }
+    return wrap;
+}
+
+/** One event as a line in a calendar cell. */
+function eventChip(o, { compact }) {
+    const chip = el('span', `cal-event${o.allDay ? ' is-allday' : ''}${o.continues ? ' continues' : ''}`);
+    chip.style.setProperty('--ev', eventColour(o));
+    if (!o.allDay) chip.append(el('span', 'cal-event-time', fmtTime(o.start)));
+    chip.append(el('span', 'cal-event-title', o.title));
+    if (!compact && o.members?.length > 1) chip.append(memberDots(o.members));
+    chip.title = `${whenText(o)} · ${o.title}`;
+    return chip;
+}
+
+/** One event as a tappable row, for the day sheet and the Today screen. */
+function eventRow(o) {
+    const row = el('button', 'event-row');
+    row.type = 'button';
+    row.dataset.event = o.id;
+    row.dataset.occurrence = o.occurrence;
+    row.dataset.date = o.date;
+    row.style.setProperty('--ev', eventColour(o));
+    const when = el('span', 'event-when', whenText(o));
+    const main = el('span', 'event-main');
+    main.append(el('span', 'event-title', o.title));
+    const people = (o.members ?? []).map((id) => memberById(id)?.name).filter(Boolean);
+    const sub = [people.join(', '), o.location].filter(Boolean).join(' · ');
+    if (sub) main.append(el('span', 'event-sub', sub));
+    row.append(when, main, memberDots(o.members));
+    return row;
+}
+
+let editingEvent = null; // { event, occurrence } while the sheet is open
+
+function eventFieldsShown() {
+    const allDay = $('ev-allday').checked;
+    $('ev-times').hidden = allDay;
+    $('ev-enddate-row').hidden = !allDay;
+    const repeats = $('ev-repeat').value !== 'none';
+    $('ev-until-row').hidden = !repeats;
+    $('ev-series-note').hidden = !(repeats && editingEvent?.event);
+}
+
+async function openEventEditor(id, { date, occurrence } = {}) {
+    let event = null;
+    if (id) {
+        try {
+            ({ event } = await api(`/api/events/${id}`));
+        } catch (e) {
+            return toast(e.message);
+        }
+    }
+    editingEvent = { event, occurrence: occurrence ?? null };
+
+    $('event-heading').textContent = event ? 'Edit event' : 'New event';
+    $('event-error').hidden = true;
+    $('ev-title').value = event?.title ?? '';
+    $('ev-date').value = event?.date ?? date ?? isoDate(new Date());
+    $('ev-enddate').value = event?.endDate ?? '';
+    $('ev-allday').checked = event ? event.allDay : false;
+    $('ev-start').value = event?.start ?? '';
+    $('ev-end').value = event?.end ?? '';
+    $('ev-repeat').value = event?.repeat ?? 'none';
+    $('ev-until').value = event?.until ?? '';
+    $('ev-location').value = event?.location ?? '';
+    $('ev-notes').value = event?.notes ?? '';
+
+    // Who: a chip per person, in their colour. None ticked is everybody's.
+    const who = $('ev-members');
+    who.querySelectorAll('label, .hint').forEach((n) => n.remove());
+    if (!state.members.length) who.append(el('p', 'hint', 'Add the family under Settings to give events a person.'));
+    for (const m of state.members) {
+        const label = el('label', 'who-chip');
+        label.style.setProperty('--who', m.colour);
+        const input = el('input');
+        input.type = 'checkbox';
+        input.value = m.id;
+        input.checked = event?.members?.includes(m.id) ?? false;
+        label.append(input, avatar(m, 'avatar small'), el('span', null, m.name));
+        who.append(label);
+    }
+
+    // "Delete this day" only makes sense for one day of a repeating series.
+    $('ev-delete').hidden = !event;
+    $('ev-delete').textContent = event && event.repeat !== 'none' ? 'Delete all' : 'Delete';
+    $('ev-delete-one').hidden = !(event && event.repeat !== 'none' && occurrence);
+    eventFieldsShown();
+    $('event-editor').showModal();
+    if (!event) $('ev-title').focus();
+}
+
+/** Whatever is on screen that shows events, read again. */
+async function refreshEvents() {
+    if (state.view === 'cal') await loadCalendar();
+    if (state.view === 'today') await loadTodayEvents();
+}
+
+async function saveEvent(e) {
+    e.preventDefault();
+    const err = $('event-error');
+    err.hidden = true;
+    const allDay = $('ev-allday').checked;
+    const body = {
+        title: $('ev-title').value,
+        date: $('ev-date').value,
+        endDate: allDay ? $('ev-enddate').value : '',
+        allDay,
+        start: allDay ? '' : $('ev-start').value,
+        end: allDay ? '' : $('ev-end').value,
+        members: [...$('ev-members').querySelectorAll('input:checked')].map((i) => i.value),
+        repeat: $('ev-repeat').value,
+        until: $('ev-until').value,
+        location: $('ev-location').value,
+        notes: $('ev-notes').value,
+    };
+    // A timed event needs its time; saying so here beats a round trip that
+    // only comes back to say it.
+    if (!allDay && !body.start) {
+        err.textContent = 'Pick a start time, or tick All day.';
+        err.hidden = false;
+        return;
+    }
+    try {
+        const { event } = editingEvent ?? {};
+        if (event) await api(`/api/events/${event.id}`, { method: 'PUT', body });
+        else await api('/api/events', { method: 'POST', body });
+        $('event-editor').close();
+        await refreshEvents();
+        toast(event ? 'Saved' : 'Added to the calendar');
+    } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+    }
+}
+
+async function deleteEvent(onlyThisDay) {
+    const { event, occurrence } = editingEvent ?? {};
+    if (!event) return;
+    const day = occurrence ? parseIso(occurrence).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) : '';
+    const sure = await askConfirm(
+        onlyThisDay
+            ? { title: `Delete ${event.title} on ${day}?`, body: 'Only that day. Every other time it repeats stays.', confirmLabel: 'Delete this day', danger: true }
+            : {
+                  title: `Delete ${event.title}?`,
+                  body: event.repeat === 'none' ? 'It comes off the calendar.' : 'Every time it repeats comes off the calendar, past and future.',
+                  confirmLabel: event.repeat === 'none' ? 'Delete' : 'Delete all',
+                  danger: true,
+              },
+    );
+    if (!sure) return;
+    try {
+        const q = onlyThisDay ? `?occurrence=${occurrence}` : '';
+        await api(`/api/events/${event.id}${q}`, { method: 'DELETE' });
+        $('event-editor').close();
+        await refreshEvents();
+        toast('Deleted');
+    } catch (ex) {
+        toast(ex.message);
+    }
+}
+
+async function loadTodayEvents() {
+    const host = $('today-events');
+    const today = isoDate(new Date());
+    try {
+        const { occurrences } = await api(`/api/events?from=${today}&to=${today}`);
+        host.replaceChildren(
+            ...(occurrences.length
+                ? occurrences.map((o) => eventRow(o))
+                : [el('p', 'hint', 'Nothing on the calendar today.')]),
+        );
+    } catch {
+        host.replaceChildren(el('p', 'hint', 'Today\'s events could not be loaded.'));
+    }
+}
+
 // ------------------------------------------------------------------ today --
 
 /*
@@ -869,7 +1102,7 @@ async function loadToday() {
     todayRefresh = setInterval(() => {
         if (state.view === 'today' && !document.hidden) loadToday();
     }, 5 * 60_000);
-    await Promise.all([loadTodayWeather(), loadTodayDinner()]);
+    await Promise.all([loadTodayWeather(), loadTodayDinner(), loadTodayEvents()]);
 }
 
 async function loadTodayWeather() {
@@ -1263,6 +1496,33 @@ for (const b of document.querySelectorAll('#food-tabs [data-sub]')) {
 
 // --- settings: family and weather ---
 $('btn-add-member').addEventListener('click', () => openMemberEditor(null));
+
+// --- events ---
+const fromRow = (row) => openEventEditor(row.dataset.event, { occurrence: row.dataset.occurrence });
+$('today-events').addEventListener('click', (e) => {
+    const row = e.target.closest('.event-row');
+    if (row) fromRow(row);
+});
+$('btn-today-event').addEventListener('click', () => openEventEditor(null, { date: isoDate(new Date()) }));
+// Like the picker, the day sheet makes way rather than stacking a sheet on a
+// sheet, which a phone has no room for.
+$('day-events').addEventListener('click', (e) => {
+    const row = e.target.closest('.event-row');
+    if (!row) return;
+    $('day').close();
+    fromRow(row);
+});
+$('day-add-event').addEventListener('click', () => {
+    const date = state.dayOpen;
+    $('day').close();
+    openEventEditor(null, { date });
+});
+$('event-form').addEventListener('submit', saveEvent);
+$('event-close').addEventListener('click', () => $('event-editor').close());
+$('ev-allday').addEventListener('change', eventFieldsShown);
+$('ev-repeat').addEventListener('change', eventFieldsShown);
+$('ev-delete').addEventListener('click', () => deleteEvent(false));
+$('ev-delete-one').addEventListener('click', () => deleteEvent(true));
 $('member-list').addEventListener('click', (e) => {
     const row = e.target.closest('[data-member]');
     if (row) openMemberEditor(memberById(row.dataset.member));

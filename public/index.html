@@ -71,16 +71,30 @@
     <!-- What a family board is for: the time, the weather and what is
          happening today, readable from across the kitchen. -->
     <section id="view-today" class="view">
+      <!-- Two columns that each stack on a landscape iPad, so a long day of
+           events cannot leave a hole beside the weather. On a phone the
+           columns dissolve and the cards fall into one list, weather second. -->
       <div class="today-grid">
-        <article class="panel-card today-clock">
-          <div class="clock" id="today-time">--:--</div>
-          <div class="clock-date" id="today-date"></div>
-        </article>
-        <article class="panel-card today-weather" id="today-weather"></article>
-        <article class="panel-card today-dinner">
-          <h2 class="panel-label">Dinner</h2>
-          <div id="today-dinner"></div>
-        </article>
+        <div class="today-col">
+          <article class="panel-card today-clock">
+            <div class="clock" id="today-time">--:--</div>
+            <div class="clock-date" id="today-date"></div>
+          </article>
+          <article class="panel-card today-events">
+            <div class="panel-head">
+              <h2 class="panel-label">Today</h2>
+              <button type="button" class="ghost" id="btn-today-event">Add</button>
+            </div>
+            <div id="today-events"></div>
+          </article>
+        </div>
+        <div class="today-col">
+          <article class="panel-card today-weather" id="today-weather"></article>
+          <article class="panel-card today-dinner">
+            <h2 class="panel-label">Dinner</h2>
+            <div id="today-dinner"></div>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -198,6 +212,9 @@
       <h3 id="day-title">Day</h3>
       <button class="dialog-close" id="day-close" aria-label="Close">&times;</button>
     </div>
+    <div id="day-events"></div>
+    <button type="button" class="ghost add-row" id="day-add-event">+ Add an event</button>
+    <h4 class="sheet-label">Dinner</h4>
     <div id="day-slots"></div>
   </div>
 </dialog>
@@ -273,6 +290,59 @@
     <div class="sheet-actions">
       <span class="spacer"></span>
       <button class="primary" type="submit">Fill it in</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- -------------------------------------------------------- event sheet -->
+<dialog id="event-editor" aria-labelledby="event-heading">
+  <form class="sheet" id="event-form" method="dialog">
+    <div class="sheet-head">
+      <h3 id="event-heading">New event</h3>
+      <button class="dialog-close" id="event-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <label>What
+      <input id="ev-title" maxlength="120" placeholder="Soccer practice" autocomplete="off" enterkeyhint="next">
+    </label>
+
+    <div class="row">
+      <label>Day <input id="ev-date" type="date"></label>
+      <label id="ev-enddate-row">Last day <input id="ev-enddate" type="date"></label>
+    </div>
+
+    <label class="check"><input type="checkbox" id="ev-allday"> All day</label>
+    <div class="row" id="ev-times">
+      <label>Starts <input id="ev-start" type="time"></label>
+      <label>Ends <input id="ev-end" type="time"></label>
+    </div>
+
+    <fieldset class="who" id="ev-members">
+      <legend>Who</legend>
+    </fieldset>
+
+    <div class="row">
+      <label>Repeats
+        <select id="ev-repeat">
+          <option value="none">Never</option>
+          <option value="weekly">Every week</option>
+          <option value="monthly">Every month</option>
+          <option value="yearly">Every year</option>
+        </select>
+      </label>
+      <label id="ev-until-row">Stops <input id="ev-until" type="date"></label>
+    </div>
+    <p class="hint" id="ev-series-note" hidden>Changes apply to every time it repeats.</p>
+
+    <label>Where <input id="ev-location" maxlength="200" placeholder="Field 3" autocomplete="off"></label>
+    <label>Notes <textarea id="ev-notes" rows="2" placeholder="Bring shin pads"></textarea></label>
+
+    <p class="error" id="event-error" hidden></p>
+    <div class="sheet-actions">
+      <button class="ghost danger" id="ev-delete-one" type="button" hidden>Delete this day</button>
+      <button class="ghost danger" id="ev-delete" type="button" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button class="primary" type="submit">Save</button>
     </div>
   </form>
 </dialog>
