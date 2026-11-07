@@ -1360,3 +1360,13 @@ body::after {
 .repeat-pick { border: 0; padding: 0; margin: 0 0 12px; }
 .repeat-pick legend { color: var(--muted); font-size: 13px; font-weight: 560; padding: 0 0 7px; }
 .repeat-pick .segmented { margin: 0; }
+
+/* A choice, not a tab: the picked one is filled in the theme's button colour
+   with a tick, because a slightly lighter panel is invisible on some themes. */
+.repeat-pick .segmented button.is-active,
+.segmented.compact button.is-active {
+    background: var(--btn-top);
+    color: var(--on-primary);
+    box-shadow: 0 2px 8px var(--glow);
+}
+.repeat-pick .segmented button.is-active::before { content: '✓ '; }

@@ -115,6 +115,18 @@ async function readBody(req, limit = 512 * 1024) {
     return body;
 }
 
+/*
+ * Stamped on the page's own stylesheet and scripts, once per start.
+ *
+ * An update restarts the container, so the stamp changes, and the page asks
+ * for style.css?v=<new> -- a name no browser has cached. Without it an iPad
+ * could pair the new page with yesterday's stylesheet, which is how a new
+ * button can arrive looking unstyled.
+ */
+const ASSET_VERSION = Date.now().toString(36);
+const stampAssets = (html) =>
+    html.toString('utf8').replace(/(\b(?:src|href)="(?!https?:|\/\/)[^"?]+\.(?:css|js))"/g, `$1?v=${ASSET_VERSION}"`);
+
 function serveStatic(req, res, urlPath) {
     const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
     const file = path.resolve(PUBLIC_DIR, rel);
@@ -127,7 +139,7 @@ function serveStatic(req, res, urlPath) {
             return fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (err2, html) => {
                 if (err2) return fail(res, 404, 'Not found');
                 res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
-                res.end(html);
+                res.end(stampAssets(html));
             });
         }
         res.writeHead(200, {
@@ -136,7 +148,7 @@ function serveStatic(req, res, urlPath) {
             'X-Content-Type-Options': 'nosniff',
             'Referrer-Policy': 'same-origin',
         });
-        res.end(data);
+        res.end(path.extname(file) === '.html' ? stampAssets(data) : data);
     });
 }
 
