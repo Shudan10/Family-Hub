@@ -96,7 +96,7 @@
           </article>
           <article class="panel-card today-chores">
             <div class="panel-head">
-              <h2 class="panel-label">Chores <span class="panel-count" id="today-chores-count"></span></h2>
+              <h2 class="panel-label">Tasks <span class="panel-count" id="today-chores-count"></span></h2>
               <button type="button" class="ghost" id="btn-today-chores">All</button>
             </div>
             <div id="today-chores"></div>
@@ -110,7 +110,7 @@
          the day the stepper is on. Tapping a chore ticks it; the pencil edits. -->
     <section id="view-tasks" class="view" hidden>
       <div class="actions tasks-actions">
-        <button class="primary" type="button" id="btn-add-task">Add a chore</button>
+        <button class="primary" type="button" id="btn-add-task">Add a task</button>
       </div>
       <div class="chore-board" id="chore-board"></div>
     </section>
@@ -166,7 +166,7 @@
             <h2>Family</h2>
             <button type="button" class="ghost" id="btn-add-member">Add someone</button>
           </div>
-          <p class="hint">Everyone gets a colour, so the calendar and the chores show whose is whose.</p>
+          <p class="hint">Everyone gets a colour, so the calendar and the tasks show whose is whose.</p>
           <div id="member-list"></div>
         </article>
 
@@ -213,7 +213,7 @@
             </div>
             <p class="hint feed-local" id="feed-local" hidden></p>
             <p class="sheet-label">Also put on the phone</p>
-            <label class="check"><input type="checkbox" id="feed-chores"> Chores with a due day</label>
+            <label class="check"><input type="checkbox" id="feed-chores"> Tasks with a due day</label>
             <label class="check"><input type="checkbox" id="feed-dinners"> Dinners</label>
             <div class="actions">
               <button type="button" class="ghost" id="btn-feed-new">New link</button>
@@ -405,38 +405,41 @@
   </form>
 </dialog>
 
-<!-- --------------------------------------------------------- chore sheet -->
+<!-- ---------------------------------------------------------- task sheet -->
 <dialog id="task-editor" aria-labelledby="task-heading">
   <form class="sheet" id="task-form" method="dialog">
     <div class="sheet-head">
-      <h3 id="task-heading">New chore</h3>
+      <h3 id="task-heading">New task</h3>
       <button class="dialog-close" id="task-close" type="button" aria-label="Close">&times;</button>
     </div>
 
     <label>What
-      <input id="tk-title" maxlength="120" placeholder="Feed the dog" autocomplete="off" enterkeyhint="done">
+      <input id="tk-title" maxlength="120" placeholder="Take the bins out" autocomplete="off" enterkeyhint="done">
     </label>
 
-    <!-- One person or anybody: a chore with two owners is a chore neither does. -->
+    <!-- One person or anybody: a task with two owners is a task neither does. -->
     <fieldset class="who" id="tk-member">
       <legend>Whose</legend>
     </fieldset>
 
-    <div class="row">
-      <label>Repeats
-        <select id="tk-repeat">
-          <option value="none">Just once</option>
-          <option value="daily">Every day</option>
-          <option value="weekly">On some days</option>
-        </select>
-      </label>
-      <label><span id="tk-date-label">Due</span> <input id="tk-date" type="date"></label>
-    </div>
+    <!-- Buttons rather than a dropdown: whether it repeats is the main
+         thing about a task, and a closed dropdown hides that it can. -->
+    <fieldset class="repeat-pick">
+      <legend>Repeats</legend>
+      <div class="segmented" id="tk-repeat" role="radiogroup" aria-label="Repeats">
+        <button type="button" role="radio" data-repeat="none">Once</button>
+        <button type="button" role="radio" data-repeat="daily">Daily</button>
+        <button type="button" role="radio" data-repeat="weekly">Weekly</button>
+        <button type="button" role="radio" data-repeat="monthly">Monthly</button>
+      </div>
+    </fieldset>
+
+    <label><span id="tk-date-label">Due</span> <input id="tk-date" type="date"></label>
 
     <fieldset class="weekdays" id="tk-days" hidden>
       <legend>Which days</legend>
     </fieldset>
-    <p class="hint" id="tk-date-hint">Leave the day empty and it waits on today's list until it is done.</p>
+    <p class="hint" id="tk-date-hint"></p>
 
     <p class="error" id="task-error" hidden></p>
     <div class="sheet-actions">

@@ -1,7 +1,7 @@
 {
   "name": "Family Hub",
   "short_name": "Family Hub",
-  "description": "The family's week: plans, dinners and the weather.",
+  "description": "The family board: calendar, tasks, dinners and the weather.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

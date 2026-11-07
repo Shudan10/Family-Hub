@@ -491,7 +491,7 @@ route('GET', /^\/api\/tasks$/, async (req, res, match, url) => {
 
 route('GET', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     const task = loadTasks().find((t) => t.id === match[1]);
-    if (!task) throw new HttpError(404, 'That chore is not on the list any more.');
+    if (!task) throw new HttpError(404, 'That task is not on the list any more.');
     sendJson(res, 200, { task });
 });
 
@@ -509,7 +509,7 @@ route('PUT', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     const body = await readBody(req);
     const tasks = loadTasks();
     const idx = tasks.findIndex((t) => t.id === match[1]);
-    if (idx < 0) throw new HttpError(404, 'That chore is not on the list any more.');
+    if (idx < 0) throw new HttpError(404, 'That task is not on the list any more.');
     const { task, errors } = normaliseTask(body, loadMembers().map((m) => m.id), tasks[idx]);
     if (errors.length) throw new HttpError(400, errors[0]);
     tasks[idx] = task;
@@ -525,8 +525,8 @@ route('POST', /^\/api\/tasks\/([A-Za-z0-9_]+)\/done$/, async (req, res, match) =
     if (!isIsoDate(date) || !isIsoDate(today)) throw new HttpError(400, 'That is not a date.');
     const tasks = loadTasks();
     const task = tasks.find((t) => t.id === match[1]);
-    if (!task) throw new HttpError(404, 'That chore is not on the list any more.');
-    if (!markDone(task, date, body.done !== false, today)) throw new HttpError(400, 'That chore is not on that day.');
+    if (!task) throw new HttpError(404, 'That task is not on the list any more.');
+    if (!markDone(task, date, body.done !== false, today)) throw new HttpError(400, 'That task is not on that day.');
     saveTasks(tasks);
     sendJson(res, 200, { ok: true });
 });
@@ -534,7 +534,7 @@ route('POST', /^\/api\/tasks\/([A-Za-z0-9_]+)\/done$/, async (req, res, match) =
 route('DELETE', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     const tasks = loadTasks();
     const idx = tasks.findIndex((t) => t.id === match[1]);
-    if (idx < 0) throw new HttpError(404, 'That chore is not on the list any more.');
+    if (idx < 0) throw new HttpError(404, 'That task is not on the list any more.');
     tasks.splice(idx, 1);
     saveTasks(tasks);
     sendJson(res, 200, { ok: true });

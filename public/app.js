@@ -1085,7 +1085,15 @@ function choreWhen(t) {
         if (t.days.length === 1) return `Every ${dayName(t.days[0], 'long')}`;
         return weekOrder().filter((i) => t.days.includes(i)).map((i) => dayName(i)).join(', ');
     }
+    if (t.repeat === 'monthly') return `Every month on the ${ordinal(Number(t.date.slice(8)))}`;
     return '';
+}
+
+/** 1st, 2nd, 3rd, 11th, 22nd. */
+function ordinal(n) {
+    const tens = n % 100;
+    const suffix = tens >= 11 && tens <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th';
+    return `${n}${suffix}`;
 }
 
 /* Somebody's colour, or a neutral one for a chore that is anybody's. */
@@ -1191,14 +1199,14 @@ async function loadTodayChores() {
         tasks = await fetchChores(today);
     } catch {
         $('today-chores-count').textContent = '';
-        return host.replaceChildren(el('p', 'hint', 'The chores could not be loaded.'));
+        return host.replaceChildren(el('p', 'hint', 'The tasks could not be loaded.'));
     }
     const done = tasks.filter((t) => t.done).length;
     $('today-chores-count').textContent = tasks.length ? `${done} of ${tasks.length}` : '';
     host.replaceChildren(
         ...(tasks.length
             ? tasks.map((t) => choreRow(t, today, { owner: true }))
-            : [el('p', 'hint', 'No chores today.')]),
+            : [el('p', 'hint', 'No tasks today.')]),
     );
 }
 
@@ -1238,12 +1246,37 @@ function onChoreClick(e) {
 }
 
 let editingTask = null;
+let taskRepeat = 'none'; // what the Repeats buttons are set to
+
+function setTaskRepeat(repeat) {
+    taskRepeat = repeat;
+    for (const b of $('tk-repeat').querySelectorAll('[data-repeat]')) {
+        const on = b.dataset.repeat === repeat;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-checked', String(on));
+    }
+    // Weekly with no day picked yet starts on the day it starts, which is
+    // nearly always the one meant, rather than an error at Save.
+    if (repeat === 'weekly' && !$('tk-days').querySelector('input:checked')) {
+        const from = $('tk-date').value || isoDate(new Date());
+        const box = $('tk-days').querySelector(`input[value="${parseIso(from).getDay()}"]`);
+        if (box) box.checked = true;
+    }
+    taskFieldsShown();
+}
 
 function taskFieldsShown() {
-    const repeat = $('tk-repeat').value;
+    const repeat = taskRepeat;
     $('tk-days').hidden = repeat !== 'weekly';
     $('tk-date-label').textContent = repeat === 'none' ? 'Due' : 'Starting';
-    $('tk-date-hint').hidden = repeat !== 'none';
+    const hint = $('tk-date-hint');
+    hint.hidden = !['none', 'monthly'].includes(repeat);
+    if (repeat === 'none') hint.textContent = "Leave the day empty and it waits on today's list until it is done.";
+    if (repeat === 'monthly') {
+        const n = Number(($('tk-date').value || isoDate(new Date())).slice(8));
+        hint.textContent = `Comes back on the ${ordinal(n)} of every month` +
+            (n > 28 ? ', and skips the months that do not have one.' : '.');
+    }
 }
 
 async function openTaskEditor(id, { date } = {}) {
@@ -1257,10 +1290,9 @@ async function openTaskEditor(id, { date } = {}) {
     }
     editingTask = task;
 
-    $('task-heading').textContent = task ? 'Edit chore' : 'New chore';
+    $('task-heading').textContent = task ? 'Edit task' : 'New task';
     $('task-error').hidden = true;
     $('tk-title').value = task?.title ?? '';
-    $('tk-repeat').value = task?.repeat ?? 'none';
     // A new chore added while looking at today waits on today's list with no
     // day of its own; one added while looking at another day is due that day.
     $('tk-date').value = task ? task.date ?? '' : date && date !== isoDate(new Date()) ? date : '';
@@ -1294,7 +1326,7 @@ async function openTaskEditor(id, { date } = {}) {
     }
 
     $('tk-delete').hidden = !task;
-    taskFieldsShown();
+    setTaskRepeat(task?.repeat ?? 'none');
     $('task-editor').showModal();
     if (!task) $('tk-title').focus();
 }
@@ -1306,7 +1338,7 @@ async function saveTask(e) {
     const body = {
         title: $('tk-title').value,
         member: $('tk-member').querySelector('input:checked')?.value || null,
-        repeat: $('tk-repeat').value,
+        repeat: taskRepeat,
         days: [...$('tk-days').querySelectorAll('input:checked')].map((i) => Number(i.value)),
         date: $('tk-date').value,
     };
@@ -1913,7 +1945,11 @@ $('btn-today-chores').addEventListener('click', () => {
 $('btn-add-task').addEventListener('click', () => openTaskEditor(null, { date: state.taskDay }));
 $('task-form').addEventListener('submit', saveTask);
 $('task-close').addEventListener('click', () => $('task-editor').close());
-$('tk-repeat').addEventListener('change', taskFieldsShown);
+$('tk-repeat').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-repeat]');
+    if (b) setTaskRepeat(b.dataset.repeat);
+});
+$('tk-date').addEventListener('change', taskFieldsShown);
 $('tk-days').addEventListener('change', () => { $('task-error').hidden = true; });
 $('tk-delete').addEventListener('click', deleteTask);
 

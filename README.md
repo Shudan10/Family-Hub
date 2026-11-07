@@ -1,7 +1,7 @@
 # Family Hub
 
 A family board for [Quick Start Home](https://github.com/Shudan10/Home): the
-day at a glance, a shared calendar, a chore chart, the weather, and the meal
+day at a glance, a shared calendar, a task chart, the weather, and the meal
 planner it grew out of. Everything is kept on this server — nothing goes to
 iCloud, Google or anybody else — and phones can see the calendar through a
 subscription link.
@@ -15,19 +15,20 @@ installs keep their data; only the name on screen changed.
 
 - **Today.** A big clock, today's weather and the next four days, what is on
   the calendar today, tonight's dinner (tap it to change it), and today's
-  chores to tick off. It notices midnight and refreshes itself every five
+  tasks to tick off. It notices midnight and refreshes itself every five
   minutes while it is on screen.
 - **The family.** Everyone gets a name and one of ten colours, chosen so no two
-  look alike. The colour marks their events and their column of chores.
-  Removing someone keeps their events and chores; they just become everybody's.
+  look alike. The colour marks their events and their column of tasks.
+  Removing someone keeps their events and tasks; they just become everybody's.
 - **Calendar events.** Timed or all day, a few days long if need be, for one
   person, several, or the whole family. They repeat weekly, monthly or yearly,
   with an optional end — and one day of a repeating event can be deleted on its
   own. A monthly event on the 31st skips the months that do not have one, and a
   birthday on 29 February waits for leap years, rather than sliding about.
-- **Chores and to-dos.** A column per person on the Tasks tab, one day at a
-  time. Chores repeat every day or on chosen days of the week and come back
-  fresh each day. One-offs have an optional due day; one with no day waits on
+- **Tasks.** A column per person on the Tasks tab, one day at a time. A task
+  happens once, or repeats daily, weekly on chosen days, or monthly on the same
+  date (one on the 31st skips the shorter months); a repeating one comes back
+  fresh each time. One-offs have an optional due day; one with no day waits on
   today's list until it is done, and one whose day has passed stays on today's
   list marked late.
 - **Weather.** From [Open-Meteo](https://open-meteo.com), which needs no
@@ -35,7 +36,7 @@ installs keep their data; only the name on screen changed.
   rounded coordinates are sent, and the forecast is cached for 15 minutes.
 - **On your iPhone.** Settings makes a calendar link and a QR code for it.
   Scanned with an iPhone camera, it subscribes the phone's Calendar app to the
-  family's events — and, if wanted, chores with a due day and the planned
+  family's events — and, if wanted, tasks with a due day and the planned
   dinners. It is read only on the phone: things are added in the hub. See
   [The calendar link](#the-calendar-link).
 
@@ -134,7 +135,7 @@ JSON files in `/data`:
 - `members.json` — the family: names and colours.
 - `events.json` — calendar events. A repeating one is stored once, as its rule
   and the days skipped.
-- `tasks.json` — chores and to-dos, with the days each was done.
+- `tasks.json` — tasks, one-off and repeating, with the days each was done.
 - `settings.json` — the town, the units, and the calendar link's token.
 
 Written to a temp file and renamed over the target, so a crash midway cannot
