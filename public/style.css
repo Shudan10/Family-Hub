@@ -1386,17 +1386,13 @@ body::after {
 .day-chip input:checked + span { background: var(--btn-top); border-color: var(--btn-bottom); color: var(--on-primary); }
 .day-chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ---------------------------------------------------------- iPhone feed -- */
+/* ------------------------------------------------------------ on iPhone -- */
 
-/* The code at a size a phone held at arm's length picks up, on its own white
-   square so the theme around it cannot get in the camera's way. */
-.feed-qr { width: min(220px, 100%); margin: 6px 0 12px; }
-.feed-qr svg { display: block; width: 100%; height: auto; border-radius: 10px; }
 .feed-steps { margin: 0 0 12px; padding-left: 20px; line-height: 1.6; }
 .feed-link input { flex: 1; min-width: 0; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .feed-local { color: var(--text); background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
 
-/* The Repeats buttons in the task sheet. */
+/* The Repeats buttons in the reminder sheet. */
 .repeat-pick { border: 0; padding: 0; margin: 0 0 12px; }
 .repeat-pick legend { color: var(--muted); font-size: 13px; font-weight: 560; padding: 0 0 7px; }
 .repeat-pick .segmented { margin: 0; }

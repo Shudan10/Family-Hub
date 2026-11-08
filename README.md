@@ -3,9 +3,8 @@
 A family board for [Quick Start Home](https://github.com/Shudan10/Home): the
 day at a glance, a shared calendar, reminders, the weather, and the meal
 planner it grew out of. Everything is kept on this server — nothing goes to
-iCloud, Google or anybody else. iPhones can add it as a calendar account, so the
-events and reminders are in their own Calendar and Reminders apps both ways, or
-just subscribe to a read-only link.
+iCloud, Google or anybody else. iPhones add it as a calendar account, so the
+events and reminders are in their own Calendar and Reminders apps, both ways.
 
 Built for an iPad on the kitchen wall in landscape, and for phones.
 
@@ -24,11 +23,11 @@ installs keep their data; only the name on screen changed.
   everybody's.
 - **Calendar events.** Timed or all day, a few days long if need be, for one
   person, several, or the whole family. They repeat every so many days, weeks,
-  months or years, with an optional end — and one day of a repeating event can be deleted on its
-  own. A monthly event on the 31st skips the months that do not have one, and a
+  months or years, with an optional end — and one day of a repeating event
+  can be deleted on its own. A monthly event on the 31st skips the months that do not have one, and a
   birthday on 29 February waits for leap years, rather than sliding about.
-  An event can have an alert, which goes off on the phones subscribed to the
-  calendar.
+  An event can have an alert, which goes off on the phones that have the
+  calendar account.
 - **Reminders.** A column per person on the Reminders tab, one day at a time.
   They work the way the iPhone's Reminders app does, since they are in it too.
   A reminder has a day it is due (or none: then it waits on today's list), and
@@ -40,14 +39,10 @@ installs keep their data; only the name on screen changed.
 - **Weather.** From [Open-Meteo](https://open-meteo.com), which needs no
   account or key. The town is set once for the house in Settings; only its
   rounded coordinates are sent, and the forecast is cached for 15 minutes.
-- **Add and edit from iPhone.** The hub is also a CalDAV server, so an iPhone
-  can add it as a calendar account. Events and reminders are then in the
-  phone's own apps, and adding, changing or ticking them there changes them
-  here. See [The calendar account](#the-calendar-account).
-- **On your iPhone, read only.** Settings also makes a calendar link and a QR
-  code for it, for a phone that should only look: it subscribes the Calendar
-  app to the family's events — and, if wanted, reminders with a due day and
-  the planned dinners. See [The calendar link](#the-calendar-link).
+- **On your iPhone.** The hub is also a CalDAV server, so an iPhone can add it
+  as a calendar account. Events and reminders are then in the phone's own
+  apps, and adding, changing or ticking them there changes them here. See
+  [The calendar account](#the-calendar-account).
 
 ## Meals
 
@@ -116,39 +111,23 @@ Colons separate the fields rather than `$` on purpose: Docker Compose
 interpolates `$NAME` when it reads an `.env` file, which silently truncated
 `$`-separated hashes and made the panel refuse the correct password.
 
-## The calendar link
-
-The phone's Calendar app cannot sign in, so the link cannot sit behind the
-family password. Instead it carries a long random token
-(`/api/feed/<token>.ics`), and that token is the key: anyone with the link can
-read the calendar, nobody without it learns anything (a wrong one is a plain
-404). **New link** in Settings replaces it, which shuts off the old one;
-**Turn off** removes it.
-
-The link is made from the address the page is open at. Made at a home address
-such as `192.168.x.x`, the phone only refreshes while it is on the home Wi-Fi
-and keeps what it last saw when away. Made at the hub's public address (once
-it is published through the panel, which needs a password first), it refreshes
-anywhere. The phone decides how often to check — usually within the hour.
-
-Repeating events go to the phone as repeat rules rather than copies, so they
-carry on as far ahead as the phone looks. Times are "floating": 10:00 means
-ten o'clock wherever the phone is.
-
-An event's alert goes to the phone as an alarm on that event. iOS sets
-**Remove Alerts** on a subscribed calendar by default, which drops every one
-of them: turn it off when subscribing, or later under Settings → Apps →
-Calendar → Calendar Accounts → Subscribed Calendars → Family Hub. The alert
-then goes off on that phone like any other calendar alert, provided the phone
-has refreshed the calendar since the alert was set.
-
 ## The calendar account
 
 On the iPhone: Settings → Apps → Calendar → Calendar Accounts → Add Account →
 Other → Add CalDAV Account. The server is the hub's address with `/dav/` on the
-end (Settings shows it), the user name `family`, the password the family
-password. At a home `http://` address the phone first says it cannot connect
-using SSL; Continue sets it up without.
+end, the user name `family`, the password the family password.
+
+Settings shows the address to use: the hub's public one (`https://…/dav/`)
+once somebody signed in has opened the hub there, which works anywhere; before
+that, the address the page is open at. The hub learns its public address only
+from a signed-in visit through the tunnel or Tailscale over https, since the
+name a request arrives under is otherwise anybody's to write. At a home
+`http://` address the phone first says it cannot connect using SSL; Continue
+sets it up without, and the phone then only syncs at home.
+
+Times go out "floating": 10:00 means ten o'clock wherever the phone is.
+Repeating events and reminders go as repeat rules rather than copies, so they
+carry on as far ahead as the phone looks.
 
 The account has one calendar, Family Hub, for events, and a reminders list per
 person plus one for Everyone. Lists are the family: they are made and removed
@@ -178,11 +157,11 @@ by adding and removing people here, and cannot be made on the phone.
 The protocol is the part of WebDAV and CalDAV the Apple apps use — PROPFIND,
 calendar-multiget and calendar-query, PUT, DELETE and MOVE, with ETags and a
 ctag per calendar — and not sync-collection, scheduling or sharing. It is in
-`lib/caldav.js`, the iCalendar reading in `lib/ical.js` and the writing in
-`lib/feed.js`.
+`lib/caldav.js`, and the iCalendar reading and writing in `lib/ical.js`.
 
-A phone that has both the account and the calendar link shows every event
-twice: use one or the other on each phone.
+There used to be a read-only calendar link to subscribe to instead. It is
+gone; a phone still subscribed to it should delete the subscription, or it
+shows the events twice beside the account.
 
 ## Data
 
@@ -196,7 +175,7 @@ JSON files in `/data`:
 - `tasks.json` — reminders, one-off and repeating, with the days each was
   ticked. Events and reminders made on a phone also keep the phone's own name
   for them (`uid`, `href`) and any details the hub has no field for (`extra`).
-- `settings.json` — the town, the units, and the calendar link's token.
+- `settings.json` — the town, the units, and the hub's public address.
 
 Written to a temp file and renamed over the target, so a crash midway cannot
 leave a half-written file that reads back as an empty library. All of them are

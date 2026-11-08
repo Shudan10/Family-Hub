@@ -184,51 +184,10 @@
           </div>
         </article>
 
-        <!-- The family calendar on a phone, as a subscribed calendar: the
-             phone reads it, and things are still added here. -->
-        <article class="panel-card" id="feed-card">
-          <div class="panel-head"><h2>On your iPhone</h2></div>
-          <p class="hint">
-            Puts the family calendar in the iPhone's Calendar app, next to your
-            own, and keeps it up to date. It is read only there: things are
-            still added here.
-          </p>
-          <div id="feed-off">
-            <button type="button" class="primary" id="btn-feed-on">Make a calendar link</button>
-          </div>
-          <div id="feed-on" hidden>
-            <div class="feed-qr" id="feed-qr"></div>
-            <ol class="feed-steps">
-              <li>Point the iPhone's camera at the code and tap the link.</li>
-              <li>Tap <b>Subscribe</b>, turn off <b>Remove Alerts</b>, then tap <b>Add</b>.</li>
-            </ol>
-            <p class="hint">
-              Or by hand: Settings &rarr; Apps &rarr; Calendar &rarr; Calendar
-              Accounts &rarr; Add Account &rarr; Other &rarr; Add Subscribed
-              Calendar, and paste this.
-            </p>
-            <p class="hint">
-              Already added it? For event alerts to go off, open Settings &rarr;
-              Apps &rarr; Calendar &rarr; Calendar Accounts &rarr; Subscribed
-              Calendars &rarr; Family Hub and turn off <b>Remove Alerts</b>.
-            </p>
-            <div class="actions feed-link">
-              <input id="feed-url" readonly aria-label="Calendar link">
-              <button type="button" class="ghost" id="btn-feed-copy">Copy</button>
-            </div>
-            <p class="hint feed-local" id="feed-local" hidden></p>
-            <p class="sheet-label">Also put on the phone</p>
-            <label class="check"><input type="checkbox" id="feed-chores"> Reminders with a due day</label>
-            <label class="check"><input type="checkbox" id="feed-dinners"> Dinners</label>
-            <div class="actions">
-              <button type="button" class="ghost" id="btn-feed-new">New link</button>
-              <button type="button" class="ghost danger" id="btn-feed-off">Turn off</button>
-            </div>
-          </div>
-        </article>
-
+        <!-- The family calendar and reminders on a phone, as an account of
+             its own that goes both ways. See lib/caldav.js. -->
         <article class="panel-card" id="account-card">
-          <div class="panel-head"><h2>Add and edit from iPhone</h2></div>
+          <div class="panel-head"><h2>On your iPhone</h2></div>
           <p class="hint">
             Adds Family Hub to an iPhone as a calendar account, the way iCloud
             or Google is added. Events and reminders added, changed or ticked in
@@ -238,7 +197,7 @@
           <ol class="feed-steps">
             <li>On the iPhone: Settings &rarr; Apps &rarr; Calendar &rarr; Calendar
               Accounts &rarr; Add Account &rarr; Other &rarr; <b>Add CalDAV Account</b>.</li>
-            <li>Server: the address below.</li>
+            <li>Server: this address, exactly.</li>
             <li>User name: <b>family</b>. Password: <span id="account-password">the family password</span>.</li>
             <li id="account-ssl">Tap <b>Next</b>. If it says it cannot connect using SSL, tap <b>Continue</b>.</li>
           </ol>
@@ -252,8 +211,9 @@
             after it: <b>Swim (Emma)</b>.
           </p>
           <p class="hint">
-            On a phone that also has the calendar link above, delete that
-            subscription there, or every event shows twice.
+            A phone that subscribed to the old Family Hub calendar link should
+            delete that subscription (Calendar Accounts &rarr; Subscribed
+            Calendars), or every event shows twice.
           </p>
         </article>
       </div>
@@ -430,7 +390,7 @@
     <p class="hint" id="ev-series-note" hidden>Changes apply to every time it repeats.</p>
 
     <label>Alert <select id="ev-alert"></select></label>
-    <p class="hint" id="ev-alert-hint" hidden>Goes off on the iPhones that have the family calendar (Settings &rarr; On your iPhone).</p>
+    <p class="hint" id="ev-alert-hint" hidden>Goes off on the iPhones that have Family Hub as a calendar account (Settings &rarr; On your iPhone).</p>
 
     <label>Where <input id="ev-location" maxlength="200" autocomplete="off"></label>
     <label>Notes <textarea id="ev-notes" rows="2"></textarea></label>
@@ -541,7 +501,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="qr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

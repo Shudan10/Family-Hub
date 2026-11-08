@@ -1615,24 +1615,8 @@ async function loadTodayDinner() {
 function renderSettings() {
     renderMembers();
     renderWeatherSettings();
-    renderFeedSettings();
     renderAccountSettings();
     renderThemes();
-}
-
-/* The two-way calendar account: where a phone finds it, and what to type. */
-function renderAccountSettings() {
-    $('account-url').value = `${location.origin}/dav/`;
-    $('account-ssl').hidden = location.protocol === 'https:';
-    $('account-password').textContent = state.passwordRequired === false ? 'anything (Family Hub has no password yet)' : 'the family password';
-    const local = localOnly(location.hostname);
-    $('account-local').hidden = !local;
-    if (local) {
-        $('account-local').textContent =
-            `This is the home address ${location.host}, so the phone only syncs on your home Wi-Fi, and keeps ` +
-            'what it has until it is back. Changes made on the phone while away wait until then. To sync anywhere, ' +
-            'open Family Hub at its public address and use the address shown there.';
-    }
 }
 
 async function loadMembers() {
@@ -1816,82 +1800,35 @@ async function chooseUnits(units) {
     }
 }
 
-// ----------------------------------------------------------- iPhone feed --
+// ------------------------------------------------------------ on iPhone --
 
-const feedPath = (token) => `/api/feed/${token}.ics`;
-
-/*
- * Whether this page was opened at a home-network address.
- *
- * The link is made from the address the page is open at, so a link made at
- * 192.168.x.x only works where that address does: on the home Wi-Fi.
- */
+/** Whether a host name only means anything on the home network. */
 function localOnly(hostname) {
     return /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.startsWith('[') ||
         hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.localhost') || !hostname.includes('.');
 }
 
-function renderFeedSettings() {
-    const settings = state.settings ?? {};
-    const token = settings.feedToken;
-    $('feed-off').hidden = Boolean(token);
-    $('feed-on').hidden = !token;
-    if (!token) return;
-
-    // webcal: is what makes the phone offer to subscribe, rather than import
-    // the events once and never hear about them again.
-    const webcal = `webcal://${location.host}${feedPath(token)}`;
-    $('feed-url').value = `${location.origin}${feedPath(token)}`;
-    try {
-        $('feed-qr').innerHTML = window.QR.toSvg(webcal);
-    } catch {
-        $('feed-qr').replaceChildren(el('p', 'hint', 'The link is too long for a code. Use the link below instead.'));
-    }
-
-    const local = localOnly(location.hostname);
-    $('feed-local').hidden = !local;
+/*
+ * The calendar account: where a phone finds it, and what to type.
+ *
+ * The address is the hub's public one whenever the hub knows it -- the server
+ * notes it the first time somebody signed in opens the hub there -- because
+ * that is the one that works away from home and over https. Only before then
+ * is it the address this page happens to be open at.
+ */
+function renderAccountSettings() {
+    const origin = state.settings?.publicOrigin ?? location.origin;
+    const url = new URL(origin);
+    $('account-url').value = `${origin}/dav/`;
+    $('account-ssl').hidden = url.protocol === 'https:';
+    $('account-password').textContent = state.passwordRequired === false ? 'anything (Family Hub has no password yet)' : 'the family password';
+    const local = localOnly(url.hostname);
+    $('account-local').hidden = !local;
     if (local) {
-        $('feed-local').textContent =
-            `This link uses the home address ${location.host}, so the iPhone only updates it on your home Wi-Fi; ` +
-            'away from home it keeps what it last saw. To have it update anywhere, open Family Hub at its public ' +
-            'address and make the link there.';
+        $('account-local').textContent =
+            `This is the home address ${url.host}, so a phone set up with it only syncs on your home Wi-Fi. ` +
+            'Open Family Hub once at its public address and this changes to that one, which works anywhere.';
     }
-    $('feed-chores').checked = settings.feedChores !== false;
-    $('feed-dinners').checked = settings.feedDinners === true;
-}
-
-async function feedRequest(method, path, body) {
-    try {
-        const { settings } = await api(path, { method, body });
-        state.settings = settings;
-        renderFeedSettings();
-        return true;
-    } catch (e) {
-        toast(e.message);
-        return false;
-    }
-}
-
-async function newFeedLink() {
-    if (state.settings?.feedToken) {
-        const sure = await askConfirm({
-            title: 'Make a new link?',
-            body: 'The old one stops working. Any phone that subscribed to it stops updating until it is given the new one.',
-            confirmLabel: 'New link',
-        });
-        if (!sure) return;
-    }
-    if (await feedRequest('POST', '/api/feed')) toast('Link ready');
-}
-
-async function turnFeedOff() {
-    const sure = await askConfirm({
-        title: 'Turn off the iPhone link?',
-        body: 'Phones that subscribed stop getting updates. Nothing in Family Hub is deleted.',
-        confirmLabel: 'Turn off',
-        danger: true,
-    });
-    if (sure && (await feedRequest('DELETE', '/api/feed'))) toast('Link turned off');
 }
 
 /*
@@ -1899,7 +1836,7 @@ async function turnFeedOff() {
  * https or localhost; at a home address over plain http it falls back to
  * selecting the text so a long press can copy it.
  */
-async function copyFeedLink(input = $('feed-url')) {
+async function copyField(input) {
     try {
         await navigator.clipboard.writeText(input.value);
         toast('Copied');
@@ -2064,13 +2001,7 @@ $('tk-days').addEventListener('change', () => { $('task-error').hidden = true; }
 $('tk-delete').addEventListener('click', deleteTask);
 
 // --- settings: the iPhone link ---
-$('btn-feed-on').addEventListener('click', newFeedLink);
-$('btn-feed-new').addEventListener('click', newFeedLink);
-$('btn-feed-off').addEventListener('click', turnFeedOff);
-$('btn-feed-copy').addEventListener('click', () => copyFeedLink());
-$('btn-account-copy').addEventListener('click', () => copyFeedLink($('account-url')));
-$('feed-chores').addEventListener('change', (e) => feedRequest('PUT', '/api/settings', { feedChores: e.target.checked }));
-$('feed-dinners').addEventListener('change', (e) => feedRequest('PUT', '/api/settings', { feedDinners: e.target.checked }));
+$('btn-account-copy').addEventListener('click', () => copyField($('account-url')));
 
 // --- settings: family and weather ---
 $('btn-add-member').addEventListener('click', () => openMemberEditor(null));
