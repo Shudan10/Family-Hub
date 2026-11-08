@@ -1,10 +1,11 @@
 # Family Hub
 
 A family board for [Quick Start Home](https://github.com/Shudan10/Home): the
-day at a glance, a shared calendar, a task chart, the weather, and the meal
+day at a glance, a shared calendar, reminders, the weather, and the meal
 planner it grew out of. Everything is kept on this server — nothing goes to
-iCloud, Google or anybody else — and phones can see the calendar through a
-subscription link.
+iCloud, Google or anybody else. iPhones can add it as a calendar account, so the
+events and reminders are in their own Calendar and Reminders apps both ways, or
+just subscribe to a read-only link.
 
 Built for an iPad on the kitchen wall in landscape, and for phones.
 
@@ -15,32 +16,38 @@ installs keep their data; only the name on screen changed.
 
 - **Today.** A big clock, today's weather and the next four days, what is on
   the calendar today, tonight's dinner (tap it to change it), and today's
-  tasks to tick off. It notices midnight and refreshes itself every five
+  reminders to tick off. It notices midnight and refreshes itself every five
   minutes while it is on screen.
 - **The family.** Everyone gets a name and one of ten colours, chosen so no two
-  look alike. The colour marks their events and their column of tasks.
-  Removing someone keeps their events and tasks; they just become everybody's.
+  look alike. The colour marks their events and their column of reminders.
+  Removing someone keeps their events and reminders; they just become
+  everybody's.
 - **Calendar events.** Timed or all day, a few days long if need be, for one
-  person, several, or the whole family. They repeat weekly, monthly or yearly,
-  with an optional end — and one day of a repeating event can be deleted on its
+  person, several, or the whole family. They repeat every so many days, weeks,
+  months or years, with an optional end — and one day of a repeating event can be deleted on its
   own. A monthly event on the 31st skips the months that do not have one, and a
   birthday on 29 February waits for leap years, rather than sliding about.
   An event can have an alert, which goes off on the phones subscribed to the
   calendar.
-- **Tasks.** A column per person on the Tasks tab, one day at a time. A task
-  happens once, or repeats daily, weekly on chosen days, or monthly on the same
-  date (one on the 31st skips the shorter months); a repeating one comes back
-  fresh each time. One-offs have an optional due day; one with no day waits on
-  today's list until it is done, and one whose day has passed stays on today's
-  list marked late.
+- **Reminders.** A column per person on the Reminders tab, one day at a time.
+  They work the way the iPhone's Reminders app does, since they are in it too.
+  A reminder has a day it is due (or none: then it waits on today's list), and
+  can have a time and notes. One that repeats — every so many days, weeks on
+  chosen days, months or years — is due one day at a time: ticking it moves it
+  on to the next, and one not ticked stays on today's list, marked late. Only
+  the latest tick of a repeating one can be taken back. (Stored as "tasks",
+  their first name, so the data and backups did not have to change.)
 - **Weather.** From [Open-Meteo](https://open-meteo.com), which needs no
   account or key. The town is set once for the house in Settings; only its
   rounded coordinates are sent, and the forecast is cached for 15 minutes.
-- **On your iPhone.** Settings makes a calendar link and a QR code for it.
-  Scanned with an iPhone camera, it subscribes the phone's Calendar app to the
-  family's events — and, if wanted, tasks with a due day and the planned
-  dinners. It is read only on the phone: things are added in the hub. See
-  [The calendar link](#the-calendar-link).
+- **Add and edit from iPhone.** The hub is also a CalDAV server, so an iPhone
+  can add it as a calendar account. Events and reminders are then in the
+  phone's own apps, and adding, changing or ticking them there changes them
+  here. See [The calendar account](#the-calendar-account).
+- **On your iPhone, read only.** Settings also makes a calendar link and a QR
+  code for it, for a phone that should only look: it subscribes the Calendar
+  app to the family's events — and, if wanted, reminders with a due day and
+  the planned dinners. See [The calendar link](#the-calendar-link).
 
 ## Meals
 
@@ -135,6 +142,48 @@ Calendar → Calendar Accounts → Subscribed Calendars → Family Hub. The aler
 then goes off on that phone like any other calendar alert, provided the phone
 has refreshed the calendar since the alert was set.
 
+## The calendar account
+
+On the iPhone: Settings → Apps → Calendar → Calendar Accounts → Add Account →
+Other → Add CalDAV Account. The server is the hub's address with `/dav/` on the
+end (Settings shows it), the user name `family`, the password the family
+password. At a home `http://` address the phone first says it cannot connect
+using SSL; Continue sets it up without.
+
+The account has one calendar, Family Hub, for events, and a reminders list per
+person plus one for Everyone. Lists are the family: they are made and removed
+by adding and removing people here, and cannot be made on the phone.
+
+- **Whose an event is** goes in brackets after its name, both ways: the hub
+  sends Emma's swim as "Swim (Emma)", and "Swim (Emma)" typed on a phone is
+  Emma's. Names in brackets that are not all family members stay part of the
+  name.
+- **Repeats** the hub cannot keep are refused, and the phone says it could not
+  save the event: an event on more than one day of the week, or "the second
+  Tuesday". Reminders can repeat on several days of the week. One day of a
+  repeating event changed on the phone ("this event only") becomes an event of
+  its own, with that day taken out of the series.
+- **Details the hub has no field for** — a reminder's flag or priority, a
+  link, the map pin behind a place — are kept as they came and sent back with
+  the rest, so editing in the hub does not lose them.
+- **Ticking a repeating reminder** on the phone ticks the one that is due and
+  moves it on, the same as in the hub. However the phone saves the tick, the
+  hub keeps it as the one reminder, and the phone sees that on its next sync.
+- **Sign-in** is HTTP Basic with the family password on every request, under
+  the same limit on wrong guesses as the sign-in page. Over a home `http://`
+  address that password crosses the home Wi-Fi unencrypted; at the public
+  `https://` address it does not. A phone that set the account up at the home
+  address only syncs at home, and keeps its changes until it is back.
+
+The protocol is the part of WebDAV and CalDAV the Apple apps use — PROPFIND,
+calendar-multiget and calendar-query, PUT, DELETE and MOVE, with ETags and a
+ctag per calendar — and not sync-collection, scheduling or sharing. It is in
+`lib/caldav.js`, the iCalendar reading in `lib/ical.js` and the writing in
+`lib/feed.js`.
+
+A phone that has both the account and the calendar link shows every event
+twice: use one or the other on each phone.
+
 ## Data
 
 JSON files in `/data`:
@@ -144,7 +193,9 @@ JSON files in `/data`:
 - `members.json` — the family: names and colours.
 - `events.json` — calendar events. A repeating one is stored once, as its rule
   and the days skipped.
-- `tasks.json` — tasks, one-off and repeating, with the days each was done.
+- `tasks.json` — reminders, one-off and repeating, with the days each was
+  ticked. Events and reminders made on a phone also keep the phone's own name
+  for them (`uid`, `href`) and any details the hub has no field for (`extra`).
 - `settings.json` — the town, the units, and the calendar link's token.
 
 Written to a temp file and renamed over the target, so a crash midway cannot

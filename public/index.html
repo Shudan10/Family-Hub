@@ -96,7 +96,7 @@
           </article>
           <article class="panel-card today-chores">
             <div class="panel-head">
-              <h2 class="panel-label">Tasks <span class="panel-count" id="today-chores-count"></span></h2>
+              <h2 class="panel-label">Reminders <span class="panel-count" id="today-chores-count"></span></h2>
               <button type="button" class="ghost" id="btn-today-chores">All</button>
             </div>
             <div id="today-chores"></div>
@@ -105,12 +105,12 @@
       </div>
     </section>
 
-    <!-- ------------------------------------------------------ tasks view -->
-    <!-- The chore chart: a column for each person and one for anybody, for
-         the day the stepper is on. Tapping a chore ticks it; the pencil edits. -->
+    <!-- -------------------------------------------------- reminders view -->
+    <!-- A column for each person and one for anybody, for the day the stepper
+         is on. Tapping a reminder ticks it; the pencil edits. -->
     <section id="view-tasks" class="view" hidden>
       <div class="actions tasks-actions">
-        <button class="primary" type="button" id="btn-add-task">Add a task</button>
+        <button class="primary" type="button" id="btn-add-task">Add a reminder</button>
       </div>
       <div class="chore-board" id="chore-board"></div>
     </section>
@@ -166,7 +166,7 @@
             <h2>Family</h2>
             <button type="button" class="ghost" id="btn-add-member">Add someone</button>
           </div>
-          <p class="hint">Everyone gets a colour, so the calendar and the tasks show whose is whose.</p>
+          <p class="hint">Everyone gets a colour, so the calendar and the reminders show whose is whose.</p>
           <div id="member-list"></div>
         </article>
 
@@ -218,13 +218,43 @@
             </div>
             <p class="hint feed-local" id="feed-local" hidden></p>
             <p class="sheet-label">Also put on the phone</p>
-            <label class="check"><input type="checkbox" id="feed-chores"> Tasks with a due day</label>
+            <label class="check"><input type="checkbox" id="feed-chores"> Reminders with a due day</label>
             <label class="check"><input type="checkbox" id="feed-dinners"> Dinners</label>
             <div class="actions">
               <button type="button" class="ghost" id="btn-feed-new">New link</button>
               <button type="button" class="ghost danger" id="btn-feed-off">Turn off</button>
             </div>
           </div>
+        </article>
+
+        <article class="panel-card" id="account-card">
+          <div class="panel-head"><h2>Add and edit from iPhone</h2></div>
+          <p class="hint">
+            Adds Family Hub to an iPhone as a calendar account, the way iCloud
+            or Google is added. Events and reminders added, changed or ticked in
+            the phone's own Calendar and Reminders apps come here, and the other
+            way round. Each person's reminders are a list of their own there.
+          </p>
+          <ol class="feed-steps">
+            <li>On the iPhone: Settings &rarr; Apps &rarr; Calendar &rarr; Calendar
+              Accounts &rarr; Add Account &rarr; Other &rarr; <b>Add CalDAV Account</b>.</li>
+            <li>Server: the address below.</li>
+            <li>User name: <b>family</b>. Password: <span id="account-password">the family password</span>.</li>
+            <li id="account-ssl">Tap <b>Next</b>. If it says it cannot connect using SSL, tap <b>Continue</b>.</li>
+          </ol>
+          <div class="actions feed-link">
+            <input id="account-url" readonly aria-label="Server address">
+            <button type="button" class="ghost" id="btn-account-copy">Copy</button>
+          </div>
+          <p class="hint feed-local" id="account-local" hidden></p>
+          <p class="hint">
+            To say whose an event is on the phone, put their name in brackets
+            after it: <b>Swim (Emma)</b>.
+          </p>
+          <p class="hint">
+            On a phone that also has the calendar link above, delete that
+            subscription there, or every event shows twice.
+          </p>
         </article>
       </div>
 
@@ -254,7 +284,7 @@
       <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg><span>Calendar</span>
     </button>
     <button class="tab" data-view="tasks">
-      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12.5 2.8 2.8L16.5 9"/></svg><span>Tasks</span>
+      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12.5 2.8 2.8L16.5 9"/></svg><span>Reminders</span>
     </button>
     <button class="tab" data-view="food">
       <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 0 0 2 2v8M9 3v6M5 3v6M18 3c-1.7 0-3 2.2-3 5v4h3v9"/></svg><span>Meals</span>
@@ -388,7 +418,9 @@
       <label>Repeats
         <select id="ev-repeat">
           <option value="none">Never</option>
+          <option value="daily">Every day</option>
           <option value="weekly">Every week</option>
+          <option value="weekly:2">Every 2 weeks</option>
           <option value="monthly">Every month</option>
           <option value="yearly">Every year</option>
         </select>
@@ -413,25 +445,25 @@
   </form>
 </dialog>
 
-<!-- ---------------------------------------------------------- task sheet -->
+<!-- ------------------------------------------------------ reminder sheet -->
 <dialog id="task-editor" aria-labelledby="task-heading">
   <form class="sheet" id="task-form" method="dialog">
     <div class="sheet-head">
-      <h3 id="task-heading">New task</h3>
+      <h3 id="task-heading">New reminder</h3>
       <button class="dialog-close" id="task-close" type="button" aria-label="Close">&times;</button>
     </div>
 
     <label>What
-      <input id="tk-title" maxlength="120" autocomplete="off" enterkeyhint="done">
+      <input id="tk-title" maxlength="200" autocomplete="off" enterkeyhint="done">
     </label>
 
-    <!-- One person or anybody: a task with two owners is a task neither does. -->
+    <!-- One person or anybody: a reminder with two owners is one neither does. -->
     <fieldset class="who" id="tk-member">
       <legend>Whose</legend>
     </fieldset>
 
     <!-- Buttons rather than a dropdown: whether it repeats is the main
-         thing about a task, and a closed dropdown hides that it can. -->
+         thing about a reminder, and a closed dropdown hides that it can. -->
     <fieldset class="repeat-pick">
       <legend>Repeats</legend>
       <div class="segmented" id="tk-repeat" role="radiogroup" aria-label="Repeats">
@@ -439,15 +471,26 @@
         <button type="button" role="radio" data-repeat="daily">Daily</button>
         <button type="button" role="radio" data-repeat="weekly">Weekly</button>
         <button type="button" role="radio" data-repeat="monthly">Monthly</button>
+        <button type="button" role="radio" data-repeat="yearly">Yearly</button>
       </div>
     </fieldset>
 
-    <label><span id="tk-date-label">Due</span> <input id="tk-date" type="date"></label>
+    <label class="every" id="tk-every-row">Every
+      <input id="tk-every" type="number" min="1" max="99" inputmode="numeric" value="1">
+      <span id="tk-every-unit">week</span>
+    </label>
+
+    <div class="row">
+      <label><span id="tk-date-label">Due</span> <input id="tk-date" type="date"></label>
+      <label>At <input id="tk-time" type="time"></label>
+    </div>
 
     <fieldset class="weekdays" id="tk-days" hidden>
       <legend>Which days</legend>
     </fieldset>
     <p class="hint" id="tk-date-hint"></p>
+
+    <label>Notes <textarea id="tk-notes" rows="2"></textarea></label>
 
     <p class="error" id="task-error" hidden></p>
     <div class="sheet-actions">

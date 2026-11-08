@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -36,7 +37,17 @@ import { buildCalendar, newFeedToken, tokenMatches } from './lib/feed.js';
 import { loadMembers, MEMBER_COLOURS, normaliseMember, saveMembers } from './lib/family.js';
 import { loadEvents, normaliseEvent, occurrences, REPEATS, saveEvents, unassignMember as unassignFromEvents } from './lib/events.js';
 import { loadSettings, normaliseLocation, saveSettings, UNITS } from './lib/settings.js';
-import { loadTasks, markDone, normaliseTask, saveTasks, TASK_REPEATS, tasksOn, unassignMember as unassignFromTasks } from './lib/tasks.js';
+import {
+    loadTasks,
+    markDone,
+    migrateTasks,
+    normaliseTask,
+    saveTasks,
+    TASK_REPEATS,
+    tasksOn,
+    unassignMember as unassignFromTasks,
+} from './lib/tasks.js';
+import { handleDav } from './lib/caldav.js';
 import { forecast, forgetForecast, searchPlaces } from './lib/weather.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -498,12 +509,16 @@ function taskDays(url) {
 
 route('GET', /^\/api\/tasks$/, async (req, res, match, url) => {
     const { date, today } = taskDays(url);
-    sendJson(res, 200, { date, today, tasks: tasksOn(loadTasks(), date, today), repeats: TASK_REPEATS });
+    const tasks = loadTasks();
+    // Reminders saved under the first rules move to these the first time a
+    // device asks, which is when the family's own today is known.
+    if (migrateTasks(tasks, today)) saveTasks(tasks);
+    sendJson(res, 200, { date, today, tasks: tasksOn(tasks, date, today), repeats: TASK_REPEATS });
 });
 
 route('GET', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     const task = loadTasks().find((t) => t.id === match[1]);
-    if (!task) throw new HttpError(404, 'That task is not on the list any more.');
+    if (!task) throw new HttpError(404, 'That reminder is not on the list any more.');
     sendJson(res, 200, { task });
 });
 
@@ -521,7 +536,7 @@ route('PUT', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     const body = await readBody(req);
     const tasks = loadTasks();
     const idx = tasks.findIndex((t) => t.id === match[1]);
-    if (idx < 0) throw new HttpError(404, 'That task is not on the list any more.');
+    if (idx < 0) throw new HttpError(404, 'That reminder is not on the list any more.');
     const { task, errors } = normaliseTask(body, loadMembers().map((m) => m.id), tasks[idx]);
     if (errors.length) throw new HttpError(400, errors[0]);
     tasks[idx] = task;
@@ -529,7 +544,7 @@ route('PUT', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     sendJson(res, 200, { task });
 });
 
-/* Ticks a chore off for a day, or unticks it. */
+/* Ticks a reminder off for a day, or unticks it. */
 route('POST', /^\/api\/tasks\/([A-Za-z0-9_]+)\/done$/, async (req, res, match) => {
     const body = await readBody(req);
     const date = String(body.date ?? '');
@@ -537,8 +552,15 @@ route('POST', /^\/api\/tasks\/([A-Za-z0-9_]+)\/done$/, async (req, res, match) =
     if (!isIsoDate(date) || !isIsoDate(today)) throw new HttpError(400, 'That is not a date.');
     const tasks = loadTasks();
     const task = tasks.find((t) => t.id === match[1]);
-    if (!task) throw new HttpError(404, 'That task is not on the list any more.');
-    if (!markDone(task, date, body.done !== false, today)) throw new HttpError(400, 'That task is not on that day.');
+    if (!task) throw new HttpError(404, 'That reminder is not on the list any more.');
+    if (!markDone(task, date, body.done !== false, today)) {
+        throw new HttpError(
+            400,
+            body.done === false && task.repeat !== 'none'
+                ? 'Only the latest tick of a repeating reminder can be taken back.'
+                : 'That reminder is not on that day.',
+        );
+    }
     saveTasks(tasks);
     sendJson(res, 200, { ok: true });
 });
@@ -546,7 +568,7 @@ route('POST', /^\/api\/tasks\/([A-Za-z0-9_]+)\/done$/, async (req, res, match) =
 route('DELETE', /^\/api\/tasks\/([A-Za-z0-9_]+)$/, async (req, res, match) => {
     const tasks = loadTasks();
     const idx = tasks.findIndex((t) => t.id === match[1]);
-    if (idx < 0) throw new HttpError(404, 'That task is not on the list any more.');
+    if (idx < 0) throw new HttpError(404, 'That reminder is not on the list any more.');
     tasks.splice(idx, 1);
     saveTasks(tasks);
     sendJson(res, 200, { ok: true });
@@ -711,6 +733,48 @@ function crossOrigin(req) {
     return req.headers['sec-fetch-site'] === 'cross-site';
 }
 
+/*
+ * The family password, as a phone's calendar account sends it: with every
+ * request, as Basic auth, since a calendar app keeps no cookie.
+ *
+ * The same limiter as the sign-in form, so a phone cannot be used to guess
+ * faster than the form can. And once a password has been found right, its
+ * hash is remembered for a few minutes: a phone syncing asks a dozen things in
+ * a row, and a dozen scrypts would make every sync slow for the whole house.
+ */
+const DAV_REMEMBER_MS = 10 * 60 * 1000;
+let davGood = null; // { digest, until }
+
+async function davAuthorised(req) {
+    if (!authRequired()) return true;
+    const header = String(req.headers.authorization ?? '');
+    if (!/^basic /i.test(header)) return false;
+    const decoded = Buffer.from(header.slice(6).trim(), 'base64').toString('utf8');
+    // The user name is not checked: there is one family, and one password.
+    const password = decoded.slice(decoded.indexOf(':') + 1);
+    const digest = crypto.createHash('sha256').update(password).digest('hex');
+    if (davGood && davGood.until > Date.now() && davGood.digest === digest) return true;
+
+    const client = clientAddress(req);
+    if (loginRetryAfter(client) > 0) return 'throttled';
+    const attempt = noteLoginAttempt(client);
+    if (!(await verifyPassword(password))) {
+        log('failed calendar account sign-in from', client);
+        await new Promise((r) => setTimeout(r, 500));
+        return false;
+    }
+    noteLoginSuccess(client, attempt);
+    davGood = { digest, until: Date.now() + DAV_REMEMBER_MS };
+    return true;
+}
+
+/* What is the calendar account's: /dav, the address a phone looks it up by, and a phone probing '/'. */
+const isDav = (method, pathname) =>
+    pathname === '/dav' ||
+    pathname.startsWith('/dav/') ||
+    pathname.startsWith('/.well-known/caldav') ||
+    (pathname === '/' && !['GET', 'HEAD', 'POST'].includes(method));
+
 // ------------------------------------------------------------------ server --
 
 async function handle(req, res) {
@@ -732,6 +796,13 @@ async function handle(req, res) {
     if (!authRequired() && !hostAllowed(req.headers.host)) {
         log('refused host', JSON.stringify(String(req.headers.host).slice(0, 200)));
         return fail(res, 421, 'Meal Plan does not answer to this address. It can be added to MEALPLAN_ALLOWED_HOSTS.');
+    }
+
+    if (isDav(req.method, url.pathname)) {
+        if (['PUT', 'DELETE', 'MOVE', 'PROPPATCH'].includes(req.method) && crossOrigin(req)) {
+            return fail(res, 403, 'Cross-origin request refused.');
+        }
+        return handleDav(req, res, url, { authorised: () => davAuthorised(req), log });
     }
 
     const isApi = url.pathname.startsWith('/api/') || url.pathname === '/healthz';

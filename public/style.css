@@ -221,6 +221,10 @@ label.check { display: flex; align-items: center; gap: 10px; font-size: 15px; co
 label.check input { width: auto; margin: 0; }
 
 .row { display: flex; gap: 10px; }
+/* "Every [2] weeks", read as one line. */
+label.every { display: flex; align-items: center; gap: 8px; flex-direction: row; }
+label.every input[type="number"] { width: 72px; flex: 0 0 auto; margin: 0; }
+label.every span { color: var(--text); font-size: 15px; }
 .row > label { flex: 1; }
 
 /* ------------------------------------------------------------- sign in --- */
@@ -1396,6 +1400,8 @@ body::after {
 .repeat-pick { border: 0; padding: 0; margin: 0 0 12px; }
 .repeat-pick legend { color: var(--muted); font-size: 13px; font-weight: 560; padding: 0 0 7px; }
 .repeat-pick .segmented { margin: 0; }
+/* Five choices on a phone's width: tighter, and each kept to one line. */
+.repeat-pick .segmented button { padding: 8px 2px; font-size: 13px; white-space: nowrap; }
 
 /* A choice, not a tab: the picked one is filled in the theme's button colour
    with a tick, because a slightly lighter panel is invisible on some themes. */

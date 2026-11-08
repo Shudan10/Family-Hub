@@ -228,7 +228,7 @@ async function signIn(event) {
 const VIEWS = {
     today: { tab: 'today', title: 'Today' },
     cal: { tab: 'cal', title: 'Calendar', stepped: true },
-    tasks: { tab: 'tasks', title: 'Tasks', stepped: true },
+    tasks: { tab: 'tasks', title: 'Reminders', stepped: true },
     plan: { tab: 'food', title: 'Meals', stepped: true },
     meals: { tab: 'food', title: 'Meals' },
     shop: { tab: 'food', title: 'Meals', stepped: true },
@@ -938,6 +938,25 @@ function fillAlerts(allDay, value) {
     sel.dataset.allDay = String(allDay);
 }
 
+/*
+ * The Repeats choice, as "weekly" or "weekly:2". One made on a phone can be
+ * every three months or every four years; it gets a choice of its own in
+ * the list rather than showing as something it is not.
+ */
+function setEventRepeat(repeat, every) {
+    const sel = $('ev-repeat');
+    sel.querySelector('[data-custom]')?.remove();
+    const value = every > 1 ? `${repeat}:${every}` : repeat;
+    if (![...sel.options].some((o) => o.value === value)) {
+        const unit = { daily: 'days', weekly: 'weeks', monthly: 'months', yearly: 'years' }[repeat];
+        const option = el('option', null, `Every ${every} ${unit}`);
+        option.value = value;
+        option.dataset.custom = '';
+        sel.append(option);
+    }
+    sel.value = value;
+}
+
 function eventFieldsShown() {
     const allDay = $('ev-allday').checked;
     if ($('ev-alert').dataset.allDay !== String(allDay)) {
@@ -970,7 +989,7 @@ async function openEventEditor(id, { date, occurrence } = {}) {
     $('ev-allday').checked = event ? event.allDay : false;
     $('ev-start').value = event?.start ?? '';
     $('ev-end').value = event?.end ?? '';
-    $('ev-repeat').value = event?.repeat ?? 'none';
+    setEventRepeat(event?.repeat ?? 'none', event?.every ?? 1);
     $('ev-until').value = event?.until ?? '';
     $('ev-location').value = event?.location ?? '';
     $('ev-notes').value = event?.notes ?? '';
@@ -1019,7 +1038,8 @@ async function saveEvent(e) {
         start: allDay ? '' : $('ev-start').value,
         end: allDay ? '' : $('ev-end').value,
         members: [...$('ev-members').querySelectorAll('input:checked')].map((i) => i.value),
-        repeat: $('ev-repeat').value,
+        repeat: $('ev-repeat').value.split(':')[0],
+        every: Number($('ev-repeat').value.split(':')[1] ?? 1),
         until: $('ev-until').value,
         location: $('ev-location').value,
         notes: $('ev-notes').value,
@@ -1109,19 +1129,36 @@ function fmtTaskDay(iso) {
     return parseIso(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
-/** The small line under a chore: how often, or how late. */
+/** The small line under a reminder: its time, and how often or how late. */
 function choreWhen(t) {
-    if (t.overdue) return `Late · was due ${fmtDayShort(t.date)}`;
-    if (t.repeat === 'daily') return 'Every day';
+    const parts = [];
+    if (t.time && !t.done) parts.push(fmtTime(t.time));
+    if (t.overdue) parts.push(`Late · was due ${fmtDayShort(t.date)}`);
+    else if (t.repeat !== 'none') parts.push(repeatText(t));
+    return parts.filter(Boolean).join(' · ');
+}
+
+/** How often a reminder comes round, in words. */
+function repeatText(t) {
+    const n = t.every || 1;
+    const every = (one, many) => (n > 1 ? `Every ${n} ${many}` : `Every ${one}`);
+    if (t.repeat === 'daily') return every('day', 'days');
     if (t.repeat === 'weekly') {
         const d = t.days.join();
-        if (d === '0,1,2,3,4,5,6') return 'Every day';
-        if (d === '1,2,3,4,5') return 'Weekdays';
-        if (d === '0,6') return 'Weekends';
-        if (t.days.length === 1) return `Every ${dayName(t.days[0], 'long')}`;
-        return weekOrder().filter((i) => t.days.includes(i)).map((i) => dayName(i)).join(', ');
+        let which = weekOrder().filter((i) => t.days.includes(i)).map((i) => dayName(i)).join(', ');
+        if (d === '0,1,2,3,4,5,6') which = 'every day';
+        else if (d === '1,2,3,4,5') which = 'weekdays';
+        else if (d === '0,6') which = 'weekends';
+        else if (t.days.length === 1) which = dayName(t.days[0], 'long');
+        if (n > 1) return `Every ${n} weeks · ${which}`;
+        if (t.days.length === 1) return `Every ${which}`;
+        return which[0].toUpperCase() + which.slice(1);
     }
-    if (t.repeat === 'monthly') return `Every month on the ${ordinal(Number(t.date.slice(8)))}`;
+    if (t.repeat === 'monthly') return `${every('month', 'months')} on the ${ordinal(Number(t.date.slice(8)))}`;
+    if (t.repeat === 'yearly') {
+        const day = parseIso(t.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
+        return `${every('year', 'years')} on ${day}`;
+    }
     return '';
 }
 
@@ -1132,7 +1169,7 @@ function ordinal(n) {
     return `${n}${suffix}`;
 }
 
-/* Somebody's colour, or a neutral one for a chore that is anybody's. */
+/* Somebody's colour, or a neutral one for a reminder that is anybody's. */
 const choreColour = (t) => memberById(t.member)?.colour ?? 'var(--muted)';
 
 const anyoneAvatar = (className = 'avatar') => {
@@ -1235,14 +1272,14 @@ async function loadTodayChores() {
         tasks = await fetchChores(today);
     } catch {
         $('today-chores-count').textContent = '';
-        return host.replaceChildren(el('p', 'hint', 'The tasks could not be loaded.'));
+        return host.replaceChildren(el('p', 'hint', 'The reminders could not be loaded.'));
     }
     const done = tasks.filter((t) => t.done).length;
     $('today-chores-count').textContent = tasks.length ? `${done} of ${tasks.length}` : '';
     host.replaceChildren(
         ...(tasks.length
             ? tasks.map((t) => choreRow(t, today, { owner: true }))
-            : [el('p', 'hint', 'No tasks today.')]),
+            : [el('p', 'hint', 'No reminders today.')]),
     );
 }
 
@@ -1301,18 +1338,29 @@ function setTaskRepeat(repeat) {
     taskFieldsShown();
 }
 
+const EVERY_UNITS = { daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'], yearly: ['year', 'years'] };
+
 function taskFieldsShown() {
     const repeat = taskRepeat;
     $('tk-days').hidden = repeat !== 'weekly';
-    $('tk-date-label').textContent = repeat === 'none' ? 'Due' : 'Starting';
-    const hint = $('tk-date-hint');
-    hint.hidden = !['none', 'monthly'].includes(repeat);
-    if (repeat === 'none') hint.textContent = "Leave the day empty and it waits on today's list until it is done.";
-    if (repeat === 'monthly') {
-        const n = Number(($('tk-date').value || isoDate(new Date())).slice(8));
-        hint.textContent = `Comes back on the ${ordinal(n)} of every month` +
-            (n > 28 ? ', and skips the months that do not have one.' : '.');
+    $('tk-every-row').hidden = repeat === 'none';
+    if (repeat !== 'none') {
+        const [one, many] = EVERY_UNITS[repeat];
+        $('tk-every-unit').textContent = Number($('tk-every').value) > 1 ? many : one;
     }
+    $('tk-date-label').textContent = repeat === 'none' ? 'Due' : 'Next due';
+    const hint = $('tk-date-hint');
+    if (repeat === 'none') {
+        hint.textContent = "Leave the day empty and it waits on today's list until it is done.";
+    } else {
+        // How a repeating one behaves is the iPhone's way, and worth saying
+        // once: it is not the same as a fresh one every day.
+        let text = 'Tick it and it moves on to the next one. Missed, it waits on today’s list until it is ticked.';
+        const n = Number(($('tk-date').value || isoDate(new Date())).slice(8));
+        if (repeat === 'monthly' && n > 28) text += ` Months with no ${ordinal(n)} are skipped.`;
+        hint.textContent = text;
+    }
+    if (editingTask?.until && repeat !== 'none') hint.textContent += ` It stops repeating after ${fmtDayShort(editingTask.until)}.`;
 }
 
 async function openTaskEditor(id, { date } = {}) {
@@ -1326,12 +1374,15 @@ async function openTaskEditor(id, { date } = {}) {
     }
     editingTask = task;
 
-    $('task-heading').textContent = task ? 'Edit task' : 'New task';
+    $('task-heading').textContent = task ? 'Edit reminder' : 'New reminder';
     $('task-error').hidden = true;
     $('tk-title').value = task?.title ?? '';
-    // A new chore added while looking at today waits on today's list with no
-    // day of its own; one added while looking at another day is due that day.
+    // A new reminder added while looking at today waits on today's list with
+    // no day of its own; one added while looking at another day is due that day.
     $('tk-date').value = task ? task.date ?? '' : date && date !== isoDate(new Date()) ? date : '';
+    $('tk-time').value = task?.time ?? '';
+    $('tk-every').value = String(task?.every ?? 1);
+    $('tk-notes').value = task?.notes ?? '';
 
     // Whose: one person, or anybody.
     const who = $('tk-member');
@@ -1377,10 +1428,17 @@ async function saveTask(e) {
         repeat: taskRepeat,
         days: [...$('tk-days').querySelectorAll('input:checked')].map((i) => Number(i.value)),
         date: $('tk-date').value,
+        time: $('tk-time').value,
+        every: Number($('tk-every').value) || 1,
+        notes: $('tk-notes').value,
     };
-    // A repeating chore with no start would also come up on every day before
-    // it was made, looking undone, all the way back.
+    // A repeating one is always due some day; left empty, that is today.
     if (body.repeat !== 'none' && !body.date) body.date = isoDate(new Date());
+    if (body.time && !body.date) {
+        err.textContent = 'Pick a day for the time to be on.';
+        err.hidden = false;
+        return;
+    }
     if (body.repeat === 'weekly' && !body.days.length) {
         err.textContent = 'Pick the days it happens.';
         err.hidden = false;
@@ -1403,7 +1461,7 @@ async function deleteTask() {
     if (!task) return;
     const sure = await askConfirm({
         title: `Delete ${task.title}?`,
-        body: task.repeat === 'none' ? 'It comes off the list.' : 'It comes off every day it repeats, and the record of when it was done goes with it.',
+        body: task.repeat === 'none' ? 'It comes off the list.' : 'It stops repeating, and the record of when it was done goes with it.',
         confirmLabel: 'Delete',
         danger: true,
     });
@@ -1558,7 +1616,23 @@ function renderSettings() {
     renderMembers();
     renderWeatherSettings();
     renderFeedSettings();
+    renderAccountSettings();
     renderThemes();
+}
+
+/* The two-way calendar account: where a phone finds it, and what to type. */
+function renderAccountSettings() {
+    $('account-url').value = `${location.origin}/dav/`;
+    $('account-ssl').hidden = location.protocol === 'https:';
+    $('account-password').textContent = state.passwordRequired === false ? 'anything (Family Hub has no password yet)' : 'the family password';
+    const local = localOnly(location.hostname);
+    $('account-local').hidden = !local;
+    if (local) {
+        $('account-local').textContent =
+            `This is the home address ${location.host}, so the phone only syncs on your home Wi-Fi, and keeps ` +
+            'what it has until it is back. Changes made on the phone while away wait until then. To sync anywhere, ' +
+            'open Family Hub at its public address and use the address shown there.';
+    }
 }
 
 async function loadMembers() {
@@ -1825,8 +1899,7 @@ async function turnFeedOff() {
  * https or localhost; at a home address over plain http it falls back to
  * selecting the text so a long press can copy it.
  */
-async function copyFeedLink() {
-    const input = $('feed-url');
+async function copyFeedLink(input = $('feed-url')) {
     try {
         await navigator.clipboard.writeText(input.value);
         toast('Copied');
@@ -1986,6 +2059,7 @@ $('tk-repeat').addEventListener('click', (e) => {
     if (b) setTaskRepeat(b.dataset.repeat);
 });
 $('tk-date').addEventListener('change', taskFieldsShown);
+$('tk-every').addEventListener('input', taskFieldsShown);
 $('tk-days').addEventListener('change', () => { $('task-error').hidden = true; });
 $('tk-delete').addEventListener('click', deleteTask);
 
@@ -1993,7 +2067,8 @@ $('tk-delete').addEventListener('click', deleteTask);
 $('btn-feed-on').addEventListener('click', newFeedLink);
 $('btn-feed-new').addEventListener('click', newFeedLink);
 $('btn-feed-off').addEventListener('click', turnFeedOff);
-$('btn-feed-copy').addEventListener('click', copyFeedLink);
+$('btn-feed-copy').addEventListener('click', () => copyFeedLink());
+$('btn-account-copy').addEventListener('click', () => copyFeedLink($('account-url')));
 $('feed-chores').addEventListener('change', (e) => feedRequest('PUT', '/api/settings', { feedChores: e.target.checked }));
 $('feed-dinners').addEventListener('change', (e) => feedRequest('PUT', '/api/settings', { feedDinners: e.target.checked }));
 
@@ -2135,6 +2210,7 @@ $('randomer-close').addEventListener('click', () => $('randomer').close());
             return;
         }
         if (!session.authenticated) return showGate();
+        state.passwordRequired = session.required;
         $('gate').hidden = true;
         $('app').hidden = false;
         await loadAll();
