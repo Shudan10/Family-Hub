@@ -1181,16 +1181,52 @@ body::after {
 .cal-grid.is-week .cal-event .member-dots { order: 2; }
 .cal-grid.is-week .cal-events { gap: 5px; width: 100%; }
 
-/* A phone's month cell is 48px wide: events become dots in their colour, as
-   dinners already do, and tapping the date gives the names. */
+/* A phone's month cell is 48px wide, which is still room for the start of a
+   name, the way the iPhone's own calendar does it: a taller cell, the name in
+   small type on a band of its colour, cut off rather than dotted out because
+   at this size an ellipsis costs two of the five letters there are. Tapping
+   the date gives the whole thing. */
 @media (max-width: 430px) {
-    .cal-grid:not(.is-week) .cal-events { flex-direction: row; flex-wrap: wrap; gap: 3px; }
-    .cal-grid:not(.is-week) .cal-event {
-        width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%;
-        background: var(--ev);
+    /* Tall enough for three names, and taller still where the phone has the
+       height, so six weeks fill the screen rather than leaving it half empty. */
+    .cal-grid:not(.is-week) .cal-day {
+        aspect-ratio: auto;
+        min-height: max(86px, calc((100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 6));
+        padding: 4px 1px 3px;
+        gap: 2px;
     }
-    .cal-grid:not(.is-week) .cal-event > * { display: none; }
-    .cal-grid:not(.is-week) .cal-more { display: none; }
+    .cal-grid:not(.is-week) .cal-num { padding-left: 2px; }
+    .cal-grid:not(.is-week) .cal-events { gap: 2px; }
+    .cal-grid:not(.is-week) .cal-event {
+        font-size: 9px;
+        line-height: 1.35;
+        padding: 0 1px 0 2px;
+        border-left-width: 2px;
+        border-radius: 3px;
+        background: color-mix(in srgb, var(--ev) 18%, transparent);
+    }
+    .cal-grid:not(.is-week) .cal-event.is-allday {
+        background: color-mix(in srgb, var(--ev) 42%, transparent);
+        padding-left: 2px;
+        border-left-width: 0;
+    }
+    .cal-grid:not(.is-week) .cal-event-time { display: none; }
+    .cal-grid:not(.is-week) .cal-event-title { text-overflow: clip; font-weight: 650; letter-spacing: -0.02em; }
+    /* One or two on a day have the room to wrap onto a second line, which is
+       the difference between "Piano le" and "Piano lesson". It breaks between
+       words only: a word too wide for the cell is cut, not split in two. */
+    .cal-grid:not(.is-week) .cal-events.is-few .cal-event-title {
+        white-space: normal;
+        overflow-wrap: normal;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
+    .cal-grid:not(.is-week) .cal-more { font-size: 9px; padding-left: 3px; line-height: 1.2; }
+    .cal-grid:not(.is-week) .cal-more-word { display: none; }
+    /* Dinners stay dots, under the events: the names are what is happening. */
+    .cal-grid:not(.is-week) .cal-meals { margin-top: auto; padding-left: 2px; }
 }
 
 .sheet-label {

@@ -463,10 +463,15 @@ function renderCalendar() {
         // dinner". A month cell has room for three before it says how many more.
         const events = state.calEvents?.get(day.date) ?? [];
         if (events.length) {
-            const list = el('span', 'cal-events');
+            const list = el('span', `cal-events${events.length <= 2 ? ' is-few' : ''}`);
             const shown = week ? events : events.slice(0, 3);
             for (const o of shown) list.append(eventChip(o, { compact: !week }));
-            if (shown.length < events.length) list.append(el('span', 'cal-more', `+${events.length - shown.length} more`));
+            if (shown.length < events.length) {
+                // "+2 more", or just "+2" in a phone's narrow cell.
+                const more = el('span', 'cal-more', `+${events.length - shown.length}`);
+                more.append(el('span', 'cal-more-word', ' more'));
+                list.append(more);
+            }
             cell.append(list);
         }
 
