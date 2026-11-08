@@ -962,7 +962,7 @@ body::after {
 
 #view-today .panel-card { margin-bottom: 14px; }
 
-.ov-clock { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 20px; }
+.ov-clock { display: flex; flex-direction: column; gap: 14px; }
 .clock {
     font-size: clamp(54px, 15vw, 104px);
     font-weight: 700;
@@ -970,7 +970,15 @@ body::after {
     line-height: 1;
     font-variant-numeric: tabular-nums;
 }
-.clock-date { font-size: 19px; color: var(--muted); font-weight: 560; }
+.clock-date { margin-top: 6px; font-size: 19px; color: var(--muted); font-weight: 560; }
+
+/* Everything on today, in letters big enough for across the room. */
+.ov-today { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; min-width: 0; }
+.ov-today .panel-label { margin: 0 0 2px; }
+.ov-today-list { display: flex; flex-direction: column; gap: 6px; }
+.ov-today .wk-event, .ov-today .wk-dinner, .ov-today .wk-rem { font-size: 16.5px; }
+.ov-today .wk-title { white-space: normal; }
+.ov-today .wk-box { width: 18px; height: 18px; }
 
 /* A column a day, the same seven as the week beneath. */
 .wx-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
@@ -1002,8 +1010,34 @@ body::after {
     #view-today:not([hidden]) { display: flex; flex-direction: column; height: 100%; min-height: 600px; }
     #view-today .panel-card { margin-bottom: 0; }
     #view-today > * + * { margin-top: 12px; }
-    .ov-clock { flex-wrap: nowrap; padding-top: 14px; padding-bottom: 14px; }
-    .clock-date { font-size: 26px; }
+    /* The time and date on the left; today fills the rest of the row, in two
+       columns when there is a lot of it, scrolling only past that. */
+    .ov-clock { flex-direction: row; align-items: stretch; gap: 28px; padding-top: 16px; padding-bottom: 16px; }
+    .ov-time { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; }
+    .clock-date { font-size: 24px; }
+    .ov-today {
+        flex: 1;
+        gap: 0;
+        border-top: 0;
+        border-left: 1px solid var(--line);
+        padding: 0 0 0 26px;
+        max-height: 190px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
+    .ov-today .panel-label { margin-bottom: 8px; }
+    .ov-today-list {
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-rows: repeat(var(--rows, 4), auto);
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 7px 28px;
+        align-content: start;
+    }
+    .ov-today .wk-event, .ov-today .wk-dinner, .ov-today .wk-rem { font-size: 17px; }
+    .ov-today .wk-rem { flex-wrap: nowrap; }
+    .ov-today .wk-rem .wk-title { flex: 0 1 auto; }
+    .ov-today .wk-rem .wk-time { flex-basis: auto; margin-left: auto; }
     .wx-week { gap: 8px; }
     .wx-day { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 2px 8px; padding: 8px 4px; }
     .wx-dname { flex: 1 1 100%; }

@@ -74,9 +74,14 @@
       <!-- Three rows, on one screen on a landscape iPad: the time, the week's
            weather, and the week itself. The weather and the week are the same
            seven days from today, so each day's forecast sits above its day. -->
+      <!-- The time with the date under it, and beside them everything on
+           today: its events, dinner and reminders. -->
       <article class="panel-card ov-clock">
-        <div class="clock" id="today-time">--:--</div>
-        <div class="clock-date" id="today-date"></div>
+        <div class="ov-time">
+          <div class="clock" id="today-time">--:--</div>
+          <div class="clock-date" id="today-date"></div>
+        </div>
+        <div class="ov-today" id="ov-today"></div>
       </article>
 
       <article class="panel-card ov-weather" id="ov-weather"></article>

@@ -13,7 +13,8 @@ installs keep their data; only the name on screen changed.
 
 ## The board
 
-- **Overview.** Three rows, on one screen on a landscape iPad: a big clock;
+- **Overview.** Three rows, on one screen on a landscape iPad: a big clock
+  with the date under it and, beside them, everything on today;
   the weather for today and the six days after it; and those same seven days
   beneath it, each with its events, its dinner and its reminders. It is for
   looking — events and dinners are changed on their own tabs — except that a

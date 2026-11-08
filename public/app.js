@@ -1609,38 +1609,54 @@ async function loadWeekOverview() {
                 el('span', 'wk-num', String(d.getDate())),
             );
             const items = el('div', 'wk-items');
-
-            for (const o of byDate.get(date) ?? []) {
-                const row = el('div', `wk-event${o.allDay ? ' is-allday' : ''}`);
-                row.style.setProperty('--ev', eventColour(o));
-                if (!o.allDay) row.append(el('span', 'wk-time', fmtTime(o.start)));
-                row.append(el('span', 'wk-title', o.title));
-                row.title = `${whenText(o)} · ${o.title}`;
-                items.append(row);
-            }
-
-            const meal = mealById(plan.days.find((p) => p.date === date)?.slots?.dinner);
-            const dinner = el('div', `wk-dinner${meal ? '' : ' is-empty'}`);
-            dinner.append(el('span', 'wk-dinner-icon', '🍽'), el('span', 'wk-title', meal ? meal.name : 'No dinner yet'));
-            items.append(dinner);
-
-            for (const t of tasks.days[date] ?? []) {
-                const row = el('button', `wk-rem${t.done ? ' is-done' : ''}${t.overdue ? ' is-late' : ''}`);
-                row.type = 'button';
-                row.style.setProperty('--who', choreColour(t));
-                row.dataset.task = t.id;
-                row.dataset.date = date;
-                row.dataset.done = String(t.done);
-                row.setAttribute('aria-pressed', String(t.done));
-                row.append(el('span', 'wk-box'), el('span', 'wk-title', t.title));
-                if (t.time && !t.done) row.append(el('span', 'wk-time', fmtTime(t.time)));
-                items.append(row);
-            }
-
+            items.append(...dayItems(date, { byDate, plan, tasks }));
             day.append(head, items);
             return day;
         }),
     );
+
+    // Today again, beside the clock, where it can be read from across the
+    // kitchen: the column for today is narrow, and today is what most of the
+    // looking is for.
+    const todayItems = dayItems(today, { byDate, plan, tasks });
+    const list = el('div', 'ov-today-list');
+    list.append(...todayItems);
+    // Down one column and then the next, four to a column at least, so a
+    // short day is one column and a long one splits evenly.
+    list.style.setProperty('--rows', String(Math.max(4, Math.ceil(todayItems.length / 2))));
+    $('ov-today').replaceChildren(el('h2', 'panel-label', 'Today'), list);
+}
+
+/** One day's events, dinner and reminders, as rows, for the week and for today. */
+function dayItems(date, { byDate, plan, tasks }) {
+    const out = [];
+    for (const o of byDate.get(date) ?? []) {
+        const row = el('div', `wk-event${o.allDay ? ' is-allday' : ''}`);
+        row.style.setProperty('--ev', eventColour(o));
+        if (!o.allDay) row.append(el('span', 'wk-time', fmtTime(o.start)));
+        row.append(el('span', 'wk-title', o.title));
+        row.title = `${whenText(o)} · ${o.title}`;
+        out.push(row);
+    }
+
+    const meal = mealById(plan.days.find((p) => p.date === date)?.slots?.dinner);
+    const dinner = el('div', `wk-dinner${meal ? '' : ' is-empty'}`);
+    dinner.append(el('span', 'wk-dinner-icon', '🍽'), el('span', 'wk-title', meal ? meal.name : 'No dinner yet'));
+    out.push(dinner);
+
+    for (const t of tasks.days[date] ?? []) {
+        const row = el('button', `wk-rem${t.done ? ' is-done' : ''}${t.overdue ? ' is-late' : ''}`);
+        row.type = 'button';
+        row.style.setProperty('--who', choreColour(t));
+        row.dataset.task = t.id;
+        row.dataset.date = date;
+        row.dataset.done = String(t.done);
+        row.setAttribute('aria-pressed', String(t.done));
+        row.append(el('span', 'wk-box'), el('span', 'wk-title', t.title));
+        if (t.time && !t.done) row.append(el('span', 'wk-time', fmtTime(t.time)));
+        out.push(row);
+    }
+    return out;
 }
 
 async function onWeekOverviewClick(e) {
@@ -2035,6 +2051,7 @@ for (const b of document.querySelectorAll('#food-tabs [data-sub]')) {
 // --- tasks ---
 $('chore-board').addEventListener('click', onChoreClick);
 $('week-overview').addEventListener('click', onWeekOverviewClick);
+$('ov-today').addEventListener('click', onWeekOverviewClick);
 $('btn-add-task').addEventListener('click', () => openTaskEditor(null, { date: state.taskDay }));
 $('task-form').addEventListener('submit', saveTask);
 $('task-close').addEventListener('click', () => $('task-editor').close());
