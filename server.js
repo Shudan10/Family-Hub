@@ -508,6 +508,16 @@ function taskDays(url) {
 }
 
 route('GET', /^\/api\/tasks$/, async (req, res, match, url) => {
+    // A run of days at once, for the week on the Overview: { days: { date: [...] } }.
+    if (url.searchParams.has('from')) {
+        const { from, to } = eventRange(url);
+        const today = url.searchParams.get('today') || from;
+        if (!isIsoDate(today)) throw new HttpError(400, 'Ask for a real date.');
+        const tasks = loadTasks();
+        if (migrateTasks(tasks, today)) saveTasks(tasks);
+        const days = Object.fromEntries(dateRange(from, to).map((d) => [d, tasksOn(tasks, d, today)]));
+        return sendJson(res, 200, { from, to, today, days });
+    }
     const { date, today } = taskDays(url);
     const tasks = loadTasks();
     // Reminders saved under the first rules move to these the first time a

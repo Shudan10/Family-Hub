@@ -67,42 +67,28 @@
   </header>
 
   <main>
-    <!-- ------------------------------------------------------ today view -->
+    <!-- --------------------------------------------------- overview view -->
     <!-- What a family board is for: the time, the weather and what is
-         happening today, readable from across the kitchen. -->
+         happening today, readable from across the kitchen -- and under it the
+         rest of the week, so Thursday's dentist is not a surprise on Thursday. -->
     <section id="view-today" class="view">
-      <!-- Two columns that each stack on a landscape iPad, so a long day of
-           events cannot leave a hole beside the weather. On a phone the
-           columns dissolve and the cards fall into one list, weather second. -->
-      <div class="today-grid">
-        <div class="today-col">
-          <article class="panel-card today-clock">
-            <div class="clock" id="today-time">--:--</div>
-            <div class="clock-date" id="today-date"></div>
-          </article>
-          <article class="panel-card today-events">
-            <div class="panel-head">
-              <h2 class="panel-label">Today</h2>
-              <button type="button" class="ghost" id="btn-today-event">Add</button>
-            </div>
-            <div id="today-events"></div>
-          </article>
+      <!-- Three rows, on one screen on a landscape iPad: the time, the week's
+           weather, and the week itself. The weather and the week are the same
+           seven days from today, so each day's forecast sits above its day. -->
+      <article class="panel-card ov-clock">
+        <div class="clock" id="today-time">--:--</div>
+        <div class="clock-date" id="today-date"></div>
+      </article>
+
+      <article class="panel-card ov-weather" id="ov-weather"></article>
+
+      <article class="panel-card week-overview">
+        <div class="panel-head">
+          <h2 class="panel-label">This week <span class="panel-count" id="week-overview-range"></span></h2>
+          <button type="button" class="ghost" id="btn-today-event">Add event</button>
         </div>
-        <div class="today-col">
-          <article class="panel-card today-weather" id="today-weather"></article>
-          <article class="panel-card today-dinner">
-            <h2 class="panel-label">Dinner</h2>
-            <div id="today-dinner"></div>
-          </article>
-          <article class="panel-card today-chores">
-            <div class="panel-head">
-              <h2 class="panel-label">Reminders <span class="panel-count" id="today-chores-count"></span></h2>
-              <button type="button" class="ghost" id="btn-today-chores">All</button>
-            </div>
-            <div id="today-chores"></div>
-          </article>
-        </div>
-      </div>
+        <div class="wk-days" id="week-overview"></div>
+      </article>
     </section>
 
     <!-- -------------------------------------------------- reminders view -->
@@ -238,7 +224,7 @@
        a 6.1" screen is the part a thumb reaches without re-gripping. -->
   <nav class="tabbar">
     <button class="tab is-active" data-view="today">
-      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg><span>Today</span>
+      <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg><span>Overview</span>
     </button>
     <button class="tab" data-view="cal">
       <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg><span>Calendar</span>

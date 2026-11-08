@@ -226,7 +226,7 @@ async function signIn(event) {
  * a family board needs more destinations than that.
  */
 const VIEWS = {
-    today: { tab: 'today', title: 'Today' },
+    today: { tab: 'today', title: 'Overview' },
     cal: { tab: 'cal', title: 'Calendar', stepped: true },
     tasks: { tab: 'tasks', title: 'Reminders', stepped: true },
     plan: { tab: 'food', title: 'Meals', stepped: true },
@@ -754,7 +754,7 @@ async function pick(mealId) {
         // Whichever view is on screen is the one that has to be right. The other
         // reloads when it is next opened, so there is nothing to keep in step.
         if (state.view === 'cal') await loadCalendar();
-        else if (state.view === 'today') await loadTodayDinner();
+        else if (state.view === 'today') await loadWeekOverview();
         else await loadWeek();
     } catch (e) {
         toast(e.message);
@@ -1068,7 +1068,7 @@ async function openEventEditor(id, { date, occurrence } = {}) {
 /** Whatever is on screen that shows events, read again. */
 async function refreshEvents() {
     if (state.view === 'cal') await loadCalendar();
-    if (state.view === 'today') await loadTodayEvents();
+    if (state.view === 'today') await loadWeekOverview();
 }
 
 async function saveEvent(e) {
@@ -1137,20 +1137,6 @@ async function deleteEvent(onlyThisDay) {
     }
 }
 
-async function loadTodayEvents() {
-    const host = $('today-events');
-    const today = isoDate(new Date());
-    try {
-        const { occurrences } = await api(`/api/events?from=${today}&to=${today}`);
-        host.replaceChildren(
-            ...(occurrences.length
-                ? occurrences.map((o) => eventRow(o))
-                : [el('p', 'hint', 'Nothing on the calendar today.')]),
-        );
-    } catch {
-        host.replaceChildren(el('p', 'hint', 'Today\'s events could not be loaded.'));
-    }
-}
 
 // ------------------------------------------------------------------ tasks --
 
@@ -1310,29 +1296,11 @@ function choreColumn({ member, tasks }, day) {
     return col;
 }
 
-async function loadTodayChores() {
-    const host = $('today-chores');
-    const today = isoDate(new Date());
-    let tasks;
-    try {
-        tasks = await fetchChores(today);
-    } catch {
-        $('today-chores-count').textContent = '';
-        return host.replaceChildren(el('p', 'hint', 'The reminders could not be loaded.'));
-    }
-    const done = tasks.filter((t) => t.done).length;
-    $('today-chores-count').textContent = tasks.length ? `${done} of ${tasks.length}` : '';
-    host.replaceChildren(
-        ...(tasks.length
-            ? tasks.map((t) => choreRow(t, today, { owner: true }))
-            : [el('p', 'hint', 'No reminders today.')]),
-    );
-}
 
 /** Whatever is on screen that shows chores, read again. */
 async function refreshChores() {
     if (state.view === 'tasks') await loadChores();
-    if (state.view === 'today') await loadTodayChores();
+    if (state.view === 'today') await loadWeekOverview();
 }
 
 /*
@@ -1574,11 +1542,15 @@ async function loadToday() {
     todayShown = isoDate(new Date());
     tickClock();
     if (!clockTimer) clockTimer = setInterval(tickClock, 1000);
-    await Promise.all([loadTodayWeather(), loadTodayDinner(), loadTodayEvents(), loadTodayChores()]);
+    await Promise.all([loadOverviewWeather(), loadWeekOverview()]);
 }
 
-async function loadTodayWeather() {
-    const host = $('today-weather');
+/*
+ * The week's weather, a column a day over the same seven days as the week
+ * beneath it. Today's column has the weather now as well as the day's.
+ */
+async function loadOverviewWeather() {
+    const host = $('ov-weather');
     let w;
     try {
         w = await api('/api/weather');
@@ -1602,52 +1574,139 @@ async function loadTodayWeather() {
         );
     }
 
-    const now = weatherFor(w.current.code, w.current.isDay);
-    const today = w.days[0];
-    const head = el('div', 'wx-now');
-    head.append(el('span', 'wx-icon', now.icon), el('span', 'wx-temp', `${w.current.temp}°`));
-    const sub = el('div', 'wx-sub');
-    sub.append(
-        el('span', 'wx-label', now.label),
-        el('span', 'wx-range', today ? `H ${today.high}°  L ${today.low}°` : ''),
-    );
-
-    const ahead = el('div', 'wx-days');
-    for (const day of w.days.slice(1, 5)) {
-        const cell = el('div', 'wx-day');
-        cell.append(
-            el('span', 'wx-dname', parseIso(day.date).toLocaleDateString(undefined, { weekday: 'short' })),
-            el('span', 'wx-dicon', weatherFor(day.code).icon),
-            el('span', 'wx-drange', `${day.high}° ${day.low}°`),
-        );
-        ahead.append(cell);
-    }
-    host.replaceChildren(el('h2', 'panel-label', w.place), head, sub, ahead);
+    const today = isoDate(new Date());
+    const days = overviewDates().map((date) => w.days.find((d) => d.date === date));
+    const row = el('div', 'wx-week');
+    days.forEach((day, k) => {
+        const cell = el('div', `wx-day${k === 0 ? ' is-today' : ''}`);
+        const date = overviewDates()[k];
+        cell.append(el('span', 'wx-dname', date === today ? 'Today' : parseIso(date).toLocaleDateString(undefined, { weekday: 'short' })));
+        if (k === 0) {
+            const now = weatherFor(w.current.code, w.current.isDay);
+            const head = el('span', 'wx-now');
+            head.append(el('span', 'wx-dicon', now.icon), el('span', 'wx-temp', `${w.current.temp}°`));
+            cell.append(head, el('span', 'wx-label', now.label));
+        } else if (day) {
+            cell.append(el('span', 'wx-dicon', weatherFor(day.code).icon));
+        }
+        if (day) {
+            const range = el('span', 'wx-drange');
+            range.append(el('b', null, `${day.high}°`), el('span', null, ` ${day.low}°`));
+            cell.append(range);
+            // Rain worth knowing about: a 10% chance is not.
+            if (day.rain >= 30) cell.append(el('span', 'wx-rain', `💧 ${day.rain}%`));
+        }
+        row.append(cell);
+    });
+    host.replaceChildren(el('h2', 'panel-label', w.place), row);
 }
 
-async function loadTodayDinner() {
-    const host = $('today-dinner');
+/** Today and the six days after it: the week the Overview shows. */
+function overviewDates() {
     const now = new Date();
-    const today = isoDate(now);
-    const next = new Date(now);
-    next.setDate(next.getDate() + 1);
-    const tomorrow = isoDate(next);
-    let days;
-    try {
-        ({ days } = await api(`/api/plan?from=${today}&to=${tomorrow}`));
-    } catch {
-        return host.replaceChildren(el('p', 'hint', 'Dinner could not be loaded.'));
-    }
-    const tonight = mealById(days[0]?.slots?.dinner);
-    const after = mealById(days[1]?.slots?.dinner);
-
-    const main = el('button', `today-meal${tonight ? '' : ' is-empty'}`, tonight ? tonight.name : 'Nothing planned yet');
-    main.type = 'button';
-    // Straight to the picker for tonight, without a detour through the week.
-    main.addEventListener('click', () => openPicker(today, 'dinner'));
-    host.replaceChildren(main);
-    if (after) host.append(el('p', 'hint', `Tomorrow: ${after.name}`));
+    return Array.from({ length: 7 }, (_, k) => isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + k)));
 }
+
+/*
+ * The week on the Overview: seven days from today, each with what is on the
+ * calendar, what is for dinner and what is to be done.
+ *
+ * From today rather than from Sunday, so there is never a day gone by taking
+ * up a column, and so each day lines up under its forecast. Tapping an event
+ * opens it, tapping a dinner picks one, and tapping a reminder ticks it -- the
+ * same as everywhere else. Late reminders are on today, as they are on the
+ * reminders tab.
+ */
+async function loadWeekOverview() {
+    const host = $('week-overview');
+    const today = isoDate(new Date());
+    const dates = overviewDates();
+    const range = `from=${dates[0]}&to=${dates[6]}`;
+    let plan;
+    let events;
+    let tasks;
+    try {
+        [plan, events, tasks] = await Promise.all([
+            api(`/api/plan?${range}`),
+            api(`/api/events?${range}`),
+            api(`/api/tasks?${range}&today=${today}`),
+        ]);
+    } catch {
+        return host.replaceChildren(el('p', 'hint', 'The week could not be loaded.'));
+    }
+    const byDate = groupByDate(events.occurrences);
+    $('week-overview-range').textContent = fmtWeekLabel(parseIso(dates[0]));
+
+    host.replaceChildren(
+        ...dates.map((date) => {
+            const d = parseIso(date);
+            const day = el('section', `wk-day${date === today ? ' is-today' : ''}`);
+            const head = el('div', 'wk-head');
+            head.append(
+                el('span', 'wk-name', date === today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' })),
+                el('span', 'wk-num', String(d.getDate())),
+            );
+            const items = el('div', 'wk-items');
+
+            for (const o of byDate.get(date) ?? []) {
+                const row = el('button', `wk-event${o.allDay ? ' is-allday' : ''}`);
+                row.type = 'button';
+                row.style.setProperty('--ev', eventColour(o));
+                row.dataset.event = o.id;
+                row.dataset.occurrence = o.occurrence;
+                if (!o.allDay) row.append(el('span', 'wk-time', fmtTime(o.start)));
+                row.append(el('span', 'wk-title', o.title));
+                row.title = `${whenText(o)} · ${o.title}`;
+                items.append(row);
+            }
+
+            const meal = mealById(plan.days.find((p) => p.date === date)?.slots?.dinner);
+            const dinner = el('button', `wk-dinner${meal ? '' : ' is-empty'}`);
+            dinner.type = 'button';
+            dinner.dataset.date = date;
+            dinner.append(el('span', 'wk-dinner-icon', '🍽'), el('span', 'wk-title', meal ? meal.name : 'No dinner yet'));
+            items.append(dinner);
+
+            for (const t of tasks.days[date] ?? []) {
+                const row = el('button', `wk-rem${t.done ? ' is-done' : ''}${t.overdue ? ' is-late' : ''}`);
+                row.type = 'button';
+                row.style.setProperty('--who', choreColour(t));
+                row.dataset.task = t.id;
+                row.dataset.date = date;
+                row.dataset.done = String(t.done);
+                row.setAttribute('aria-pressed', String(t.done));
+                row.append(el('span', 'wk-box'), el('span', 'wk-title', t.title));
+                if (t.time && !t.done) row.append(el('span', 'wk-time', fmtTime(t.time)));
+                items.append(row);
+            }
+
+            day.append(head, items);
+            return day;
+        }),
+    );
+}
+
+async function onWeekOverviewClick(e) {
+    const event = e.target.closest('.wk-event');
+    if (event) return openEventEditor(event.dataset.event, { occurrence: event.dataset.occurrence });
+    const dinner = e.target.closest('.wk-dinner');
+    if (dinner) return openPicker(dinner.dataset.date, 'dinner');
+    const rem = e.target.closest('.wk-rem');
+    if (!rem) return;
+    const done = rem.dataset.done !== 'true';
+    // Ticked on screen at once, as the reminder lists are.
+    rem.classList.toggle('is-done', done);
+    try {
+        await api(`/api/tasks/${rem.dataset.task}/done`, {
+            method: 'POST',
+            body: { date: rem.dataset.date, today: isoDate(new Date()), done },
+        });
+    } catch (ex) {
+        toast(ex.message);
+    }
+    await refreshChores();
+}
+
 
 // --------------------------------------------------------------- settings --
 
@@ -2022,11 +2081,7 @@ for (const b of document.querySelectorAll('#food-tabs [data-sub]')) {
 
 // --- tasks ---
 $('chore-board').addEventListener('click', onChoreClick);
-$('today-chores').addEventListener('click', onChoreClick);
-$('btn-today-chores').addEventListener('click', () => {
-    state.taskDay = isoDate(new Date());
-    setView('tasks');
-});
+$('week-overview').addEventListener('click', onWeekOverviewClick);
 $('btn-add-task').addEventListener('click', () => openTaskEditor(null, { date: state.taskDay }));
 $('task-form').addEventListener('submit', saveTask);
 $('task-close').addEventListener('click', () => $('task-editor').close());
@@ -2047,10 +2102,6 @@ $('btn-add-member').addEventListener('click', () => openMemberEditor(null));
 
 // --- events ---
 const fromRow = (row) => openEventEditor(row.dataset.event, { occurrence: row.dataset.occurrence });
-$('today-events').addEventListener('click', (e) => {
-    const row = e.target.closest('.event-row');
-    if (row) fromRow(row);
-});
 $('btn-today-event').addEventListener('click', () => openEventEditor(null, { date: isoDate(new Date()) }));
 // Like the picker, the day sheet makes way rather than stacking a sheet on a
 // sheet, which a phone has no room for.

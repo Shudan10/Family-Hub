@@ -13,10 +13,13 @@ installs keep their data; only the name on screen changed.
 
 ## The board
 
-- **Today.** A big clock, today's weather and the next four days, what is on
-  the calendar today, tonight's dinner (tap it to change it), and today's
-  reminders to tick off. It notices midnight.
-- **Keeping fresh.** Whatever tab is showing — Today, the calendar, reminders,
+- **Overview.** Three rows, on one screen on a landscape iPad: a big clock;
+  the weather for today and the six days after it; and those same seven days
+  beneath it, each with its events, its dinner and its reminders. Tap an event
+  to open it, a dinner to pick one, a reminder to tick it; late reminders wait
+  on today. A busy day scrolls inside its own column. On a phone the rows stack
+  and the days become a list. It notices midnight.
+- **Keeping fresh.** Whatever tab is showing — the Overview, the calendar, reminders,
   the week's plan or the shopping list — is read again every five minutes while
   it is on screen, and straight away when the app comes back after being away,
   so changes made on a phone reach a board left on any of them. Not while the

@@ -993,50 +993,65 @@ body::after {
 .segmented.compact { display: inline-flex; margin: 12px 0 0; }
 .segmented.compact button { flex: 0 0 auto; min-width: 58px; }
 
-/* ------------------------------------------------------------ today --- */
+/* --------------------------------------------------------- overview --- */
 
-.today-grid { display: grid; gap: 14px; }
-.today-grid .panel-card { margin-bottom: 0; }
+#view-today .panel-card { margin-bottom: 14px; }
 
+.ov-clock { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 20px; }
 .clock {
-    font-size: clamp(54px, 15vw, 120px);
+    font-size: clamp(54px, 15vw, 104px);
     font-weight: 700;
     letter-spacing: -0.04em;
     line-height: 1;
     font-variant-numeric: tabular-nums;
 }
-.clock-date { margin-top: 8px; font-size: 19px; color: var(--muted); font-weight: 560; }
+.clock-date { font-size: 19px; color: var(--muted); font-weight: 560; }
 
-.wx-now { display: flex; align-items: center; gap: 12px; }
-.wx-icon { font-size: 56px; line-height: 1; }
-.wx-temp { font-size: 54px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
-.wx-sub { display: flex; justify-content: space-between; gap: 10px; margin: 8px 0 14px; color: var(--muted); font-weight: 560; }
-.wx-range { font-variant-numeric: tabular-nums; }
-.wx-days {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-    border-top: 1px solid var(--line);
-    padding-top: 12px;
+/* A column a day, the same seven as the week beneath. */
+.wx-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.wx-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px;
+    border-radius: 10px;
+    text-align: center;
+    min-width: 0;
 }
-.wx-day { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.wx-dname { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.wx-dicon { font-size: 26px; line-height: 1; }
-.wx-drange { font-size: 13px; font-variant-numeric: tabular-nums; }
+.wx-day.is-today { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.wx-dname { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wx-day.is-today .wx-dname { color: var(--accent); }
+.wx-dicon { font-size: 24px; line-height: 1.1; }
+.wx-now { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.wx-temp { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.wx-label { font-size: 11.5px; color: var(--muted); font-weight: 560; display: none; }
+.wx-drange { font-size: 12.5px; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; line-height: 1.25; }
+.wx-drange span { color: var(--muted); }
+.wx-rain { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.today-meal {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: 0;
-    padding: 2px 0;
-    font-size: 26px;
-    font-weight: 700;
-    color: var(--slot-dinner);
+/* A landscape iPad: everything on one screen. The clock and the weather take
+   what they need and the week has the rest; a day with more in it than fits
+   scrolls inside its own column rather than pushing the page down. */
+@media (min-width: 900px) {
+    #view-today:not([hidden]) { display: flex; flex-direction: column; height: 100%; min-height: 600px; }
+    #view-today .panel-card { margin-bottom: 0; }
+    #view-today > * + * { margin-top: 12px; }
+    .ov-clock { flex-wrap: nowrap; padding-top: 14px; padding-bottom: 14px; }
+    .clock-date { font-size: 26px; }
+    .wx-week { gap: 8px; }
+    .wx-day { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 2px 8px; padding: 8px 4px; }
+    .wx-dname { flex: 1 1 100%; }
+    .wx-dicon { font-size: 30px; }
+    .wx-now { flex-direction: row; gap: 6px; }
+    .wx-temp { font-size: 30px; }
+    .wx-label { display: block; flex: 1 1 100%; }
+    .wx-drange { font-size: 14px; flex-direction: row; gap: 4px; }
+    .wx-rain { flex: 1 1 100%; }
+    .week-overview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .week-overview .wk-days { flex: 1; min-height: 0; }
+    .week-overview .wk-day { overflow-y: auto; overflow-x: hidden; min-height: 0; }
 }
-.today-meal.is-empty { color: var(--muted); font-weight: 560; font-size: 19px; }
-.today-meal:active { transform: none; opacity: 0.7; }
 
 /* ---------------------------------------------------------- settings --- */
 
@@ -1082,26 +1097,99 @@ body::after {
 #place-results { margin-top: 6px; }
 
 @media (min-width: 900px) {
-    /* Two columns on a landscape iPad: the time and the weather side by side
-       at the top, the day's details beneath. */
-    .today-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
-
     .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; margin-bottom: 14px; }
     .segmented:not(.compact) { max-width: 460px; }
 }
 
-/* --------------------------------------------------------------- today -- */
+/* ------------------------------------------------------- the week ahead -- */
 
-/* On a phone the two columns dissolve and the cards fall into one list, in
-   the order a morning glance wants: the time, the weather, the day, dinner. */
-.today-col { display: contents; }
-.today-clock { order: 1; }
-.today-weather { order: 2; }
-.today-events { order: 3; }
-.today-dinner { order: 4; }
-.today-chores { order: 5; }
+/* On a phone a day is a row: the date down the left, its things beside it. */
+.wk-days { display: flex; flex-direction: column; }
+.wk-day {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+}
+.wk-day:first-child { border-top: 0; padding-top: 2px; }
+.wk-head { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+.wk-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.wk-num { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wk-day.is-today .wk-name,
+.wk-day.is-today .wk-num { color: var(--accent); }
+.wk-items { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.wk-event, .wk-dinner, .wk-rem {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    font-size: 14.5px;
+    line-height: 1.3;
+    color: var(--text);
+    background: none;
+    border: 0;
+    border-radius: 7px;
+    padding: 3px 0;
+    min-height: 0;
+}
+.wk-event:active, .wk-dinner:active, .wk-rem:active { transform: none; opacity: 0.7; }
+.wk-event {
+    padding: 4px 8px;
+    border-left: 3px solid var(--ev);
+    border-radius: 4px 7px 7px 4px;
+    background: color-mix(in srgb, var(--ev) 13%, transparent);
+    font-weight: 600;
+}
+.wk-event.is-allday { background: color-mix(in srgb, var(--ev) 30%, transparent); }
+.wk-time { flex: 0 0 auto; font-size: 12.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wk-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-dinner { color: var(--slot-dinner); font-weight: 650; }
+.wk-dinner-icon { flex: 0 0 auto; font-size: 13px; }
+.wk-dinner.is-empty { color: var(--muted); font-weight: 500; font-size: 13.5px; }
+.wk-box {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--who);
+}
+.wk-rem.is-done .wk-box { background: var(--who); }
+.wk-rem.is-done .wk-title { text-decoration: line-through; color: var(--muted); }
+.wk-rem .wk-time { margin-left: auto; }
+.wk-rem.is-late .wk-title { color: var(--danger); }
+
+/* A landscape iPad has the width for the week as seven columns, the way a
+   paper calendar on the fridge lays it out. */
 @media (min-width: 900px) {
-    .today-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .wk-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+    .wk-day {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 9px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel-2);
+    }
+    .wk-day:first-child { padding-top: 10px; }
+    .wk-day.is-today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .wk-head { flex-direction: row; align-items: baseline; gap: 6px; }
+    .wk-num { font-size: 20px; }
+    /* Names wrap in a column rather than being cut to "Piano le" -- between
+       words, and through one only when a single word is wider than the column. */
+    .wk-title { white-space: normal; overflow-wrap: break-word; }
+    .wk-event { flex-wrap: wrap; row-gap: 0; font-size: 13.5px; }
+    .wk-dinner, .wk-rem { font-size: 13.5px; align-items: flex-start; }
+    .wk-box { margin-top: 1px; }
+    /* A reminder's time goes under its name, which needs the width more. */
+    .wk-rem { flex-wrap: wrap; row-gap: 0; }
+    .wk-rem .wk-title { flex: 1 1 0; }
+    .wk-rem .wk-time { margin-left: 23px; flex-basis: 100%; }
+    .week-overview .wk-day { scrollbar-width: thin; }
 }
 
 /* -------------------------------------------------------------- events -- */
