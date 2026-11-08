@@ -15,9 +15,9 @@ installs keep their data; only the name on screen changed.
 
 - **Overview.** Three rows, on one screen on a landscape iPad: a big clock;
   the weather for today and the six days after it; and those same seven days
-  beneath it, each with its events, its dinner and its reminders. Tap an event
-  to open it, a dinner to pick one, a reminder to tick it; late reminders wait
-  on today. A busy day scrolls inside its own column. On a phone the rows stack
+  beneath it, each with its events, its dinner and its reminders. It is for
+  looking — events and dinners are changed on their own tabs — except that a
+  reminder can be ticked off there; late reminders wait on today. A busy day scrolls inside its own column. On a phone the rows stack
   and the days become a list. It notices midnight.
 - **Keeping fresh.** Whatever tab is showing — the Overview, the calendar, reminders,
   or the week's meal plan — is read again every five minutes while

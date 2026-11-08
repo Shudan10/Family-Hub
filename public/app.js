@@ -1574,10 +1574,10 @@ function overviewDates() {
  * calendar, what is for dinner and what is to be done.
  *
  * From today rather than from Sunday, so there is never a day gone by taking
- * up a column, and so each day lines up under its forecast. Tapping an event
- * opens it, tapping a dinner picks one, and tapping a reminder ticks it -- the
- * same as everywhere else. Late reminders are on today, as they are on the
- * reminders tab.
+ * up a column, and so each day lines up under its forecast. It is for looking:
+ * events and dinners are changed on their own tabs. The one thing done here is
+ * ticking off a reminder, which is what somebody walking past wants to do.
+ * Late reminders are on today, as they are on the reminders tab.
  */
 async function loadWeekOverview() {
     const host = $('week-overview');
@@ -1611,11 +1611,8 @@ async function loadWeekOverview() {
             const items = el('div', 'wk-items');
 
             for (const o of byDate.get(date) ?? []) {
-                const row = el('button', `wk-event${o.allDay ? ' is-allday' : ''}`);
-                row.type = 'button';
+                const row = el('div', `wk-event${o.allDay ? ' is-allday' : ''}`);
                 row.style.setProperty('--ev', eventColour(o));
-                row.dataset.event = o.id;
-                row.dataset.occurrence = o.occurrence;
                 if (!o.allDay) row.append(el('span', 'wk-time', fmtTime(o.start)));
                 row.append(el('span', 'wk-title', o.title));
                 row.title = `${whenText(o)} · ${o.title}`;
@@ -1623,9 +1620,7 @@ async function loadWeekOverview() {
             }
 
             const meal = mealById(plan.days.find((p) => p.date === date)?.slots?.dinner);
-            const dinner = el('button', `wk-dinner${meal ? '' : ' is-empty'}`);
-            dinner.type = 'button';
-            dinner.dataset.date = date;
+            const dinner = el('div', `wk-dinner${meal ? '' : ' is-empty'}`);
             dinner.append(el('span', 'wk-dinner-icon', '🍽'), el('span', 'wk-title', meal ? meal.name : 'No dinner yet'));
             items.append(dinner);
 
@@ -1649,10 +1644,6 @@ async function loadWeekOverview() {
 }
 
 async function onWeekOverviewClick(e) {
-    const event = e.target.closest('.wk-event');
-    if (event) return openEventEditor(event.dataset.event, { occurrence: event.dataset.occurrence });
-    const dinner = e.target.closest('.wk-dinner');
-    if (dinner) return openPicker(dinner.dataset.date, 'dinner');
     const rem = e.target.closest('.wk-rem');
     if (!rem) return;
     const done = rem.dataset.done !== 'true';

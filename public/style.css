@@ -1101,7 +1101,7 @@ body::after {
     padding: 3px 0;
     min-height: 0;
 }
-.wk-event:active, .wk-dinner:active, .wk-rem:active { transform: none; opacity: 0.7; }
+.wk-rem:active { transform: none; opacity: 0.7; }
 .wk-event {
     padding: 4px 8px;
     border-left: 3px solid var(--ev);
