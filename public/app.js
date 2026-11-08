@@ -221,7 +221,7 @@ async function signIn(event) {
 /*
  * Every destination, which tab it belongs to, and what it shows on top.
  *
- * The plan, the recipes and the shopping list are three views behind one tab,
+ * The plan, the meals and the shopping list are three views behind one tab,
  * Meals, with a switch at the top: a phone's dock has room for five tabs, and
  * a family board needs more destinations than that.
  */
