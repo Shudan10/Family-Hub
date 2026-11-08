@@ -25,6 +25,8 @@ installs keep their data; only the name on screen changed.
   with an optional end — and one day of a repeating event can be deleted on its
   own. A monthly event on the 31st skips the months that do not have one, and a
   birthday on 29 February waits for leap years, rather than sliding about.
+  An event can have an alert, which goes off on the phones subscribed to the
+  calendar.
 - **Tasks.** A column per person on the Tasks tab, one day at a time. A task
   happens once, or repeats daily, weekly on chosen days, or monthly on the same
   date (one on the 31st skips the shorter months); a repeating one comes back
@@ -125,6 +127,13 @@ anywhere. The phone decides how often to check — usually within the hour.
 Repeating events go to the phone as repeat rules rather than copies, so they
 carry on as far ahead as the phone looks. Times are "floating": 10:00 means
 ten o'clock wherever the phone is.
+
+An event's alert goes to the phone as an alarm on that event. iOS sets
+**Remove Alerts** on a subscribed calendar by default, which drops every one
+of them: turn it off when subscribing, or later under Settings → Apps →
+Calendar → Calendar Accounts → Subscribed Calendars → Family Hub. The alert
+then goes off on that phone like any other calendar alert, provided the phone
+has refreshed the calendar since the alert was set.
 
 ## Data
 

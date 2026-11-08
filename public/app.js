@@ -913,8 +913,37 @@ function eventRow(o) {
 
 let editingEvent = null; // { event, occurrence } while the sheet is open
 
+/* The alert choices, minutes before the start; an all-day event's are times on a day. */
+const ALERTS = {
+    timed: [
+        [0, 'At the time'], [5, '5 minutes before'], [10, '10 minutes before'], [15, '15 minutes before'],
+        [30, '30 minutes before'], [60, '1 hour before'], [120, '2 hours before'], [1440, '1 day before'],
+        [2880, '2 days before'], [10080, '1 week before'],
+    ],
+    allDay: [[-540, 'On the day (9 am)'], [900, '1 day before (9 am)'], [2340, '2 days before (9 am)'], [9540, '1 week before (9 am)']],
+};
+// Switching to or from all day keeps the alert as near as it can.
+const ALERT_SWAP = { '-540': 15, 900: 1440, 2340: 2880, 9540: 10080 };
+
+function fillAlerts(allDay, value) {
+    const sel = $('ev-alert');
+    const list = allDay ? ALERTS.allDay : ALERTS.timed;
+    if (value != null && !list.some(([m]) => m === value)) {
+        const back = Object.entries(ALERT_SWAP).find(([, t]) => t === value);
+        value = allDay ? (back ? Number(back[0]) : -540) : (ALERT_SWAP[value] ?? 15);
+    }
+    const option = (v, label) => Object.assign(el('option', null, label), { value: v });
+    sel.replaceChildren(option('', 'None'), ...list.map(([m, label]) => option(String(m), label)));
+    sel.value = value == null ? '' : String(value);
+    sel.dataset.allDay = String(allDay);
+}
+
 function eventFieldsShown() {
     const allDay = $('ev-allday').checked;
+    if ($('ev-alert').dataset.allDay !== String(allDay)) {
+        fillAlerts(allDay, $('ev-alert').value === '' ? null : Number($('ev-alert').value));
+    }
+    $('ev-alert-hint').hidden = $('ev-alert').value === '';
     $('ev-times').hidden = allDay;
     $('ev-enddate-row').hidden = !allDay;
     const repeats = $('ev-repeat').value !== 'none';
@@ -945,6 +974,7 @@ async function openEventEditor(id, { date, occurrence } = {}) {
     $('ev-until').value = event?.until ?? '';
     $('ev-location').value = event?.location ?? '';
     $('ev-notes').value = event?.notes ?? '';
+    fillAlerts($('ev-allday').checked, event?.alert ?? null);
 
     // Who: a chip per person, in their colour. None ticked is everybody's.
     const who = $('ev-members');
@@ -993,6 +1023,7 @@ async function saveEvent(e) {
         until: $('ev-until').value,
         location: $('ev-location').value,
         notes: $('ev-notes').value,
+        alert: $('ev-alert').value,
     };
     // A timed event needs its time; saying so here beats a round trip that
     // only comes back to say it.
@@ -1993,6 +2024,7 @@ $('event-form').addEventListener('submit', saveEvent);
 $('event-close').addEventListener('click', () => $('event-editor').close());
 $('ev-allday').addEventListener('change', eventFieldsShown);
 $('ev-repeat').addEventListener('change', eventFieldsShown);
+$('ev-alert').addEventListener('change', eventFieldsShown);
 $('ev-delete').addEventListener('click', () => deleteEvent(false));
 $('ev-delete-one').addEventListener('click', () => deleteEvent(true));
 $('member-list').addEventListener('click', (e) => {

@@ -200,12 +200,17 @@
             <div class="feed-qr" id="feed-qr"></div>
             <ol class="feed-steps">
               <li>Point the iPhone's camera at the code and tap the link.</li>
-              <li>Tap <b>Subscribe</b>, then <b>Add</b>.</li>
+              <li>Tap <b>Subscribe</b>, turn off <b>Remove Alerts</b>, then tap <b>Add</b>.</li>
             </ol>
             <p class="hint">
               Or by hand: Settings &rarr; Apps &rarr; Calendar &rarr; Calendar
               Accounts &rarr; Add Account &rarr; Other &rarr; Add Subscribed
               Calendar, and paste this.
+            </p>
+            <p class="hint">
+              Already added it? For event alerts to go off, open Settings &rarr;
+              Apps &rarr; Calendar &rarr; Calendar Accounts &rarr; Subscribed
+              Calendars &rarr; Family Hub and turn off <b>Remove Alerts</b>.
             </p>
             <div class="actions feed-link">
               <input id="feed-url" readonly aria-label="Calendar link">
@@ -391,6 +396,9 @@
       <label id="ev-until-row">Stops <input id="ev-until" type="date"></label>
     </div>
     <p class="hint" id="ev-series-note" hidden>Changes apply to every time it repeats.</p>
+
+    <label>Alert <select id="ev-alert"></select></label>
+    <p class="hint" id="ev-alert-hint" hidden>Goes off on the iPhones that have the family calendar (Settings &rarr; On your iPhone).</p>
 
     <label>Where <input id="ev-location" maxlength="200" autocomplete="off"></label>
     <label>Notes <textarea id="ev-notes" rows="2"></textarea></label>
