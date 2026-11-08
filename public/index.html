@@ -57,8 +57,7 @@
       <button class="icon-btn" id="btn-today" title="Jump to this week" hidden>Today</button>
     </div>
 
-    <!-- Week stepper. Only on the plan and shopping views, which are the two
-         that mean something relative to a particular week. -->
+    <!-- Stepper, for the views that show a particular week, month or day. -->
     <div class="weeknav" id="weeknav" hidden>
       <button class="icon-btn" id="week-prev" aria-label="Previous week">&#8249;</button>
       <span id="week-label">&nbsp;</span>
@@ -85,7 +84,6 @@
       <article class="panel-card week-overview">
         <div class="panel-head">
           <h2 class="panel-label">This week <span class="panel-count" id="week-overview-range"></span></h2>
-          <button type="button" class="ghost" id="btn-today-event">Add event</button>
         </div>
         <div class="wk-days" id="week-overview"></div>
       </article>
@@ -101,13 +99,12 @@
       <div class="chore-board" id="chore-board"></div>
     </section>
 
-    <!-- The Meals tab holds three things, switched here rather than given a
-         tab each: five tabs is all a phone's dock takes, and the plan, the
-         meals and the shopping list are one job. -->
+    <!-- The Meals tab holds two things, switched here rather than given a
+         tab each: five tabs is all a phone's dock takes, and the plan and the
+         meals are one job. -->
     <div class="segmented" id="food-tabs" role="tablist" hidden>
       <button type="button" role="tab" data-sub="plan">This week</button>
       <button type="button" role="tab" data-sub="meals">Meals</button>
-      <button type="button" role="tab" data-sub="shop">Shopping</button>
     </div>
 
     <!-- ------------------------------------------------------- plan view -->
@@ -130,18 +127,16 @@
 
     <!-- ------------------------------------------------------ meals view -->
     <section id="view-meals" class="view" hidden>
-      <div class="actions">
-        <input id="meal-search" type="search" placeholder="Search meals" enterkeyhint="search" autocomplete="off">
-        <button class="primary" id="btn-add-meal" aria-label="Add a meal">+</button>
-      </div>
+      <!-- One box, two jobs: type a name and Add puts it in the library at
+           once (the rest can be filled in later by tapping it); Search turns
+           the same box into a filter, and Done turns it back. -->
+      <form class="actions meal-bar" id="meal-bar">
+        <input id="meal-input" placeholder="New meal" aria-label="New meal" maxlength="120" enterkeyhint="done" autocomplete="off">
+        <button type="submit" class="primary" id="btn-add-meal">Add</button>
+        <button type="button" class="ghost" id="btn-search-meals" aria-pressed="false">Search</button>
+      </form>
       <p class="hint" id="meals-count"></p>
       <div id="meal-list"></div>
-    </section>
-
-    <!-- --------------------------------------------------- shopping view -->
-    <section id="view-shop" class="view" hidden>
-      <p class="hint" id="shop-hint"></p>
-      <div id="shop-list"></div>
     </section>
 
     <!-- --------------------------------------------------- settings view -->

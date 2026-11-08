@@ -284,7 +284,8 @@ main {
 
 .actions { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
 .actions input[type="search"] { flex: 1; }
-#btn-add-meal { font-size: 22px; line-height: 1; padding: 9px 17px; }
+#meal-bar input { flex: 1; min-width: 0; }
+#btn-search-meals.is-active { background: var(--btn-top); color: var(--on-primary); border-color: transparent; }
 #btn-random { display: inline-flex; align-items: center; }
 
 .tabbar {
@@ -471,33 +472,6 @@ main {
 .day-slot:active { background: var(--panel-2); transform: none; }
 .day-slot .slot-meal { flex: 1; font-weight: 560; }
 .day-slot .slot-meal.is-empty { color: var(--muted); font-weight: 450; }
-
-/* ------------------------------------------------------ shopping view ---- */
-
-.shop-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    margin-bottom: 8px;
-    min-height: 48px;
-}
-.shop-item input { margin-top: 1px; }
-.shop-text { flex: 1; }
-.shop-item.is-done .shop-text { text-decoration: line-through; color: var(--muted); }
-.shop-for { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.shop-count {
-    flex: 0 0 auto;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    border-radius: 999px;
-    padding: 2px 8px;
-}
 
 /* ------------------------------------------------------------- empties --- */
 
@@ -738,15 +712,6 @@ dialog::backdrop { background: rgba(4, 10, 24, 0.55); backdrop-filter: blur(3px)
     }
     #meal-list .meal-card { margin-bottom: 0; }
     #meal-list .empty { grid-column: 1 / -1; }
-
-    #shop-list {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 9px;
-        align-items: start;
-    }
-    #shop-list .shop-item { margin-bottom: 0; }
-    #shop-list .empty { grid-column: 1 / -1; }
 
     /* The day sheet is a side panel's worth of content; on a landscape screen
        a bottom sheet would cover the month it is describing. */

@@ -31,7 +31,6 @@ import {
     saveMeals,
     savePlan,
     setPlanSlot,
-    shoppingList,
     SLOTS,
 } from './lib/store.js';
 import { loadMembers, MEMBER_COLOURS, normaliseMember, saveMembers } from './lib/family.js';
@@ -362,13 +361,6 @@ route('DELETE', /^\/api\/plan$/, async (req, res, match, url) => {
     }
     savePlan(plan);
     sendJson(res, 200, { ok: true, cleared });
-});
-
-// --------------------------------------------------------------- shopping --
-
-route('GET', /^\/api\/shopping$/, async (req, res, match, url) => {
-    const { from, to, dates } = rangeFrom(url);
-    sendJson(res, 200, { from, to, items: shoppingList(loadPlan(), loadMeals(), dates) });
 });
 
 // ----------------------------------------------------------------- family --

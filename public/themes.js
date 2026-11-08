@@ -304,7 +304,7 @@ const THEMES = [
 const themeById = (id) => THEMES.find((theme) => theme.id === id) ?? THEMES[0];
 
 /*
- * Saved in this browser, like the shopping ticks.
+ * Saved in this browser, not on the server.
  *
  * Wrapped because private browsing and blocked site data make localStorage
  * throw rather than return nothing, and a theme that cannot be saved is no

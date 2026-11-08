@@ -20,7 +20,7 @@ installs keep their data; only the name on screen changed.
   on today. A busy day scrolls inside its own column. On a phone the rows stack
   and the days become a list. It notices midnight.
 - **Keeping fresh.** Whatever tab is showing — the Overview, the calendar, reminders,
-  the week's plan or the shopping list — is read again every five minutes while
+  or the week's meal plan — is read again every five minutes while
   it is on screen, and straight away when the app comes back after being away,
   so changes made on a phone reach a board left on any of them. Not while the
   page is hidden, not while a sheet or editor is open, and not the meal library
@@ -55,8 +55,9 @@ installs keep their data; only the name on screen changed.
 ## Meals
 
 - **A meal library.** Name, tags, how many it serves, ingredients and method.
-  Only the name is required, so adding "Tacos" takes three seconds and the
-  recipe can be filled in later.
+  Only the name is required: type "Tacos" in the box above the list and tap
+  Add, and the rest can be filled in later by tapping it. Search turns the
+  same box into a filter, and Done turns it back.
 - **A week at a time.** One meal a day — dinner, which is the one that gets
   planned. Tap a day, pick a meal.
 - **A month, or a week.** The calendar shows the shape of a month at a glance,
@@ -74,10 +75,6 @@ installs keep their data; only the name on screen changed.
   different meats, but they are still tacos, and one of them on Tuesday stops
   another appearing on Friday. The rules are a short list at the top of
   `lib/store.js` (`WEEKLY_LIMITS`); adding another is one line.
-- **A shopping list.** Everything the planned week needs, grouped, with a count
-  where two meals want the same thing. Quantities are not added up: "500g mince"
-  and "1 lb mince" cannot be reconciled without a unit parser, and a list that
-  quietly gets the amounts wrong is worse than one that shows both lines.
 - **Themes.** Colours — Blue, Black, White, Red, Green, Purple, Orange, Pink
   and Teal — and holidays from New Year's round to Christmas, each with its own
   palette and a small mark of the season. Blue, the default, follows the
@@ -189,10 +186,6 @@ Written to a temp file and renamed over the target, so a crash midway cannot
 leave a half-written file that reads back as an empty library. All of them are
 plain enough to fix with a text editor, which is the main reason they are not a
 database.
-
-Shopping-list ticks are *not* stored here — they live in the browser of whoever
-is doing the shopping, because syncing them would mean someone at home
-un-ticking a row halfway down an aisle.
 
 ## Notes
 

@@ -221,7 +221,7 @@ async function signIn(event) {
 /*
  * Every destination, which tab it belongs to, and what it shows on top.
  *
- * The plan, the meals and the shopping list are three views behind one tab,
+ * The plan and the meals are two views behind one tab,
  * Meals, with a switch at the top: a phone's dock has room for five tabs, and
  * a family board needs more destinations than that.
  */
@@ -231,10 +231,9 @@ const VIEWS = {
     tasks: { tab: 'tasks', title: 'Reminders', stepped: true },
     plan: { tab: 'food', title: 'Meals', stepped: true },
     meals: { tab: 'food', title: 'Meals' },
-    shop: { tab: 'food', title: 'Meals', stepped: true },
     settings: { tab: 'settings', title: 'Settings' },
 };
-const FOOD_VIEWS = ['plan', 'meals', 'shop'];
+const FOOD_VIEWS = ['plan', 'meals'];
 
 function setView(requested) {
     // The Meals tab opens whichever of its three was open last.
@@ -257,8 +256,9 @@ function setView(requested) {
         b.setAttribute('aria-selected', String(on));
     }
 
-    // The stepper steps by a week on the plan and the shopping list, and by a
-    // month on the calendar. The rest have nothing to step through.
+    // The stepper steps by a week on the plan, by a month or a week on the
+    // calendar, and by a day on the reminders. The rest have nothing to step
+    // through.
     $('weeknav').hidden = !def.stepped;
     $('btn-today').hidden = !def.stepped;
     $('btn-today').textContent =
@@ -268,15 +268,14 @@ function setView(requested) {
     /*
      * The label is set here, not only by whichever loader runs.
      *
-     * Going from the calendar to the shopping list used to leave "October 2026"
-     * above a list for one week: loadShopping has no reason to touch the label,
+     * Going from the calendar to another stepped view used to leave "October
+     * 2026" above a week: that view's loader had no reason to touch the label,
      * so it kept whatever the calendar had put there. Deciding it from the view
      * is the only way it cannot disagree with what is on screen.
      */
     if (def.stepped) $('week-label').textContent = stepperLabel(view);
 
     if (view === 'today') loadToday();
-    if (view === 'shop') loadShopping();
     if (view === 'settings') renderSettings();
     if (view === 'cal') loadCalendar().catch((e) => toast(e.message));
     if (view === 'tasks') {
@@ -314,7 +313,6 @@ function refreshView() {
     if (state.view === 'cal') quietly(loadCalendar());
     if (state.view === 'tasks') quietly(loadChores());
     if (state.view === 'plan') quietly(loadWeek());
-    if (state.view === 'shop') quietly(loadShopping());
 }
 
 setInterval(() => {
@@ -402,9 +400,11 @@ function renderDays() {
     }
 }
 
+let mealSearching = false; // whether the box above the list is searching or adding
+
 function renderMeals() {
     const host = $('meal-list');
-    const q = $('meal-search').value.trim().toLowerCase();
+    const q = mealSearching ? $('meal-input').value.trim().toLowerCase() : '';
     const list = state.meals
         .filter((m) => !q || m.name.toLowerCase().includes(q) || m.tags.some((t) => t.includes(q)))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -415,8 +415,8 @@ function renderMeals() {
 
     if (!list.length) {
         host.innerHTML = state.meals.length
-            ? '<div class="empty"><strong>Nothing matches</strong>Try a different word.</div>'
-            : '<div class="empty"><strong>No meals yet</strong>Tap + to add the first one.</div>';
+            ? '<div class="empty"><strong>Nothing matches</strong>Try a different word, or tap Add to add it.</div>'
+            : '<div class="empty"><strong>No meals yet</strong>Type one above and tap Add.</div>';
         return;
     }
 
@@ -620,88 +620,6 @@ async function loadAll() {
     renderMeals();
 }
 
-async function loadShopping() {
-    const dates = weekDates(state.weekStart);
-    const host = $('shop-list');
-    try {
-        const { items } = await api(`/api/shopping?from=${dates[0]}&to=${dates[6]}`);
-        $('shop-hint').textContent = items.length
-            ? `For ${fmtWeekLabel(state.weekStart)}. Ticks are kept on this phone only.`
-            : '';
-        if (!items.length) {
-            host.innerHTML =
-                '<div class="empty"><strong>Nothing to buy</strong>' +
-                'Plan some meals that have ingredients and they will show up here.</div>';
-            return;
-        }
-
-        const ticked = readTicks();
-        host.innerHTML = '';
-        for (const item of items) {
-            const row = document.createElement('label');
-            const done = ticked.has(item.text.toLowerCase());
-            row.className = `shop-item${done ? ' is-done' : ''}`;
-
-            const box = document.createElement('input');
-            box.type = 'checkbox';
-            box.checked = done;
-            box.addEventListener('change', () => {
-                toggleTick(item.text, box.checked);
-                row.classList.toggle('is-done', box.checked);
-            });
-
-            const text = document.createElement('span');
-            text.className = 'shop-text';
-            text.textContent = item.text;
-            const forWhat = document.createElement('span');
-            forWhat.className = 'shop-for';
-            forWhat.textContent = item.meals.join(', ');
-            text.append(forWhat);
-
-            row.append(box, text);
-            if (item.count > 1) {
-                const count = document.createElement('span');
-                count.className = 'shop-count';
-                count.textContent = `×${item.count}`;
-                row.append(count);
-            }
-            host.append(row);
-        }
-    } catch (e) {
-        toast(e.message);
-    }
-}
-
-/*
- * Shopping ticks live in this browser, not on the server.
- *
- * Deliberately: whoever is standing in the shop is the only person who cares
- * which things are already in the trolley, and syncing that would mean someone
- * at home un-ticking a row halfway down an aisle. Wrapped in try/catch because
- * private mode and blocked site data both make localStorage throw rather than
- * return nothing.
- */
-const tickKey = () => `mealplan.ticks.${weekDates(state.weekStart)[0]}`;
-
-function readTicks() {
-    try {
-        return new Set(JSON.parse(localStorage.getItem(tickKey()) || '[]'));
-    } catch {
-        return new Set();
-    }
-}
-
-function toggleTick(text, on) {
-    try {
-        const set = readTicks();
-        if (on) set.add(text.toLowerCase());
-        else set.delete(text.toLowerCase());
-        localStorage.setItem(tickKey(), JSON.stringify([...set]));
-    } catch {
-        /* nothing to do: the tick stays visual for this session */
-    }
-}
-
 // -------------------------------------------------------------- picker -----
 
 function openPicker(date, slot) {
@@ -803,6 +721,50 @@ async function saveMeal(event) {
     } catch (e) {
         err.textContent = e.message;
         err.hidden = false;
+    }
+}
+
+function setMealSearch(on) {
+    mealSearching = on;
+    const input = $('meal-input');
+    const button = $('btn-search-meals');
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-pressed', String(on));
+    button.textContent = on ? 'Done' : 'Search';
+    input.placeholder = on ? 'Search meals' : 'New meal';
+    input.setAttribute('aria-label', input.placeholder);
+    input.enterKeyHint = on ? 'search' : 'done';
+    // Leaving the search empties the box: what was typed was a search, not a
+    // meal waiting to be added.
+    if (!on) input.value = '';
+    renderMeals();
+    input.focus();
+}
+
+/*
+ * Add straight from the box: just the name, which is all a meal needs.
+ * Tapping it in the list fills in the rest when there is time. With nothing
+ * typed, Add opens the full editor instead.
+ */
+async function quickAddMeal(e) {
+    e.preventDefault();
+    const input = $('meal-input');
+    // Return on the keyboard while searching is "search", not "add this".
+    if (mealSearching && e.submitter?.id !== 'btn-add-meal') return input.blur();
+    const name = input.value.trim();
+    if (!name) return openEditor(null);
+    const same = state.meals.find((m) => m.name.toLowerCase() === name.toLowerCase());
+    if (same) return toast(`${same.name} is already there`);
+    try {
+        await api('/api/meals', { method: 'POST', body: { name, slots: SLOTS } });
+        await loadMeals();
+        input.value = '';
+        if (mealSearching) setMealSearch(false);
+        else renderMeals();
+        renderDays();
+        toast(`Added ${name}`);
+    } catch (ex) {
+        toast(ex.message);
     }
 }
 
@@ -2067,7 +2029,7 @@ function step(dir) {
     const next = new Date(state.weekStart);
     next.setDate(next.getDate() + dir * 7);
     state.weekStart = next;
-    loadWeek().then(() => { if (state.view === 'shop') loadShopping(); });
+    loadWeek();
 }
 
 $('gate-form').addEventListener('submit', signIn);
@@ -2102,7 +2064,6 @@ $('btn-add-member').addEventListener('click', () => openMemberEditor(null));
 
 // --- events ---
 const fromRow = (row) => openEventEditor(row.dataset.event, { occurrence: row.dataset.occurrence });
-$('btn-today-event').addEventListener('click', () => openEventEditor(null, { date: isoDate(new Date()) }));
 // Like the picker, the day sheet makes way rather than stacking a sheet on a
 // sheet, which a phone has no room for.
 $('day-events').addEventListener('click', (e) => {
@@ -2156,7 +2117,7 @@ $('btn-today').addEventListener('click', () => {
         return;
     }
     state.weekStart = weekStart(new Date());
-    loadWeek().then(() => { if (state.view === 'shop') loadShopping(); });
+    loadWeek();
 });
 
 // Delegated: the rows are rebuilt on every render, so listeners on them would
@@ -2187,13 +2148,14 @@ $('day-slots').addEventListener('click', (e) => {
 });
 $('day-close').addEventListener('click', () => $('day').close());
 
-$('meal-search').addEventListener('input', renderMeals);
+$('meal-bar').addEventListener('submit', quickAddMeal);
+$('meal-input').addEventListener('input', () => { if (mealSearching) renderMeals(); });
+$('btn-search-meals').addEventListener('click', () => setMealSearch(!mealSearching));
 
 $('view-settings').addEventListener('click', (e) => {
     const card = e.target.closest('.theme-card');
     if (card) chooseTheme(card.dataset.theme);
 });
-$('btn-add-meal').addEventListener('click', () => openEditor(null));
 
 $('picker-list').addEventListener('click', (e) => {
     const row = e.target.closest('[data-pick]');
