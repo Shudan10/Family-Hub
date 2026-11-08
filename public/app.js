@@ -288,6 +288,52 @@ function setView(requested) {
     if (view === 'plan') loadWeek().catch(() => {});
 }
 
+// ---------------------------------------------------------- keeping fresh --
+
+/*
+ * What is on screen, read again: a reminder ticked on a phone, or an event
+ * added in its Calendar app, reaches a board left on any tab.
+ *
+ * Every five minutes while the page is on screen, and at once when it comes
+ * back -- the home-screen app reopened, the iPad woken -- after being away
+ * for more than a few seconds. Not while the page is hidden, so a phone in a
+ * pocket does not poll; not while a sheet or editor is open, so nothing moves
+ * under somebody's finger; and not the meal library or Settings, which are
+ * mostly forms and searches that a redraw would throw away.
+ */
+const REFRESH_EVERY_MS = 5 * 60_000;
+const REFRESH_AFTER_AWAY_MS = 15_000;
+let lastRefresh = Date.now();
+let hiddenSince = null;
+
+function refreshView() {
+    if (document.hidden || document.querySelector('dialog[open]')) return;
+    lastRefresh = Date.now();
+    const quietly = (p) => Promise.resolve(p).catch(() => {});
+    if (state.view === 'today') quietly(loadToday());
+    if (state.view === 'cal') quietly(loadCalendar());
+    if (state.view === 'tasks') quietly(loadChores());
+    if (state.view === 'plan') quietly(loadWeek());
+    if (state.view === 'shop') quietly(loadShopping());
+}
+
+setInterval(() => {
+    if (Date.now() - lastRefresh >= REFRESH_EVERY_MS - 1000) refreshView();
+}, 30_000);
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        hiddenSince = Date.now();
+    } else if (hiddenSince && Date.now() - hiddenSince > REFRESH_AFTER_AWAY_MS) {
+        refreshView();
+    }
+});
+// iOS can bring a home-screen app back from memory without a visibility
+// change; this is the event it does send.
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted) refreshView();
+});
+
 function mealById(id) {
     return state.meals.find((m) => m.id === id) || null;
 }
@@ -1513,7 +1559,6 @@ const el = (tag, className, text) => {
 };
 
 let clockTimer = null;
-let todayRefresh = null;
 let todayShown = null; // the date the Today screen was last drawn for
 
 function tickClock() {
@@ -1529,12 +1574,6 @@ async function loadToday() {
     todayShown = isoDate(new Date());
     tickClock();
     if (!clockTimer) clockTimer = setInterval(tickClock, 1000);
-    // Something changed from a phone reaches the board within five minutes.
-    // Skipped while the screen is hidden, so a phone in a pocket does not poll.
-    clearInterval(todayRefresh);
-    todayRefresh = setInterval(() => {
-        if (state.view === 'today' && !document.hidden) loadToday();
-    }, 5 * 60_000);
     await Promise.all([loadTodayWeather(), loadTodayDinner(), loadTodayEvents(), loadTodayChores()]);
 }
 

@@ -15,8 +15,13 @@ installs keep their data; only the name on screen changed.
 
 - **Today.** A big clock, today's weather and the next four days, what is on
   the calendar today, tonight's dinner (tap it to change it), and today's
-  reminders to tick off. It notices midnight and refreshes itself every five
-  minutes while it is on screen.
+  reminders to tick off. It notices midnight.
+- **Keeping fresh.** Whatever tab is showing — Today, the calendar, reminders,
+  the week's plan or the shopping list — is read again every five minutes while
+  it is on screen, and straight away when the app comes back after being away,
+  so changes made on a phone reach a board left on any of them. Not while the
+  page is hidden, not while a sheet or editor is open, and not the meal library
+  or Settings, where a redraw would throw away a search or a half-filled form.
 - **The family.** Everyone gets a name and one of ten colours, chosen so no two
   look alike. The colour marks their events and their column of reminders.
   Removing someone keeps their events and reminders; they just become
