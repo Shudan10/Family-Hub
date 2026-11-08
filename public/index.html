@@ -301,24 +301,24 @@
     </div>
 
     <label>Name
-      <input id="ed-name" required maxlength="120" placeholder="Tacos" enterkeyhint="next">
+      <input id="ed-name" required maxlength="120" enterkeyhint="next">
     </label>
 
     <div class="row">
-      <label>Serves <input id="ed-serves" type="number" min="1" max="99" inputmode="numeric" placeholder="4"></label>
-      <label>Tags <input id="ed-tags" placeholder="quick, favourite" autocomplete="off"></label>
+      <label>Serves <input id="ed-serves" type="number" min="1" max="99" inputmode="numeric"></label>
+      <label>Tags <input id="ed-tags" autocomplete="off"></label>
     </div>
 
     <label>Ingredients <span class="muted">one per line</span>
-      <textarea id="ed-ingredients" rows="5" placeholder="500g mince&#10;Tortillas&#10;Cheese"></textarea>
+      <textarea id="ed-ingredients" rows="5"></textarea>
     </label>
 
     <label>Method <span class="muted">one step per line</span>
-      <textarea id="ed-method" rows="5" placeholder="Brown the mince&#10;Warm the tortillas"></textarea>
+      <textarea id="ed-method" rows="5"></textarea>
     </label>
 
     <label>Notes
-      <textarea id="ed-notes" rows="2" placeholder="Kids like it without the salsa"></textarea>
+      <textarea id="ed-notes" rows="2"></textarea>
     </label>
 
     <p class="error" id="editor-error" hidden></p>
@@ -361,7 +361,7 @@
     </div>
 
     <label>What
-      <input id="ev-title" maxlength="120" placeholder="Soccer practice" autocomplete="off" enterkeyhint="next">
+      <input id="ev-title" maxlength="120" autocomplete="off" enterkeyhint="next">
     </label>
 
     <div class="row">
@@ -392,8 +392,8 @@
     </div>
     <p class="hint" id="ev-series-note" hidden>Changes apply to every time it repeats.</p>
 
-    <label>Where <input id="ev-location" maxlength="200" placeholder="Field 3" autocomplete="off"></label>
-    <label>Notes <textarea id="ev-notes" rows="2" placeholder="Bring shin pads"></textarea></label>
+    <label>Where <input id="ev-location" maxlength="200" autocomplete="off"></label>
+    <label>Notes <textarea id="ev-notes" rows="2"></textarea></label>
 
     <p class="error" id="event-error" hidden></p>
     <div class="sheet-actions">
@@ -414,7 +414,7 @@
     </div>
 
     <label>What
-      <input id="tk-title" maxlength="120" placeholder="Take the bins out" autocomplete="off" enterkeyhint="done">
+      <input id="tk-title" maxlength="120" autocomplete="off" enterkeyhint="done">
     </label>
 
     <!-- One person or anybody: a task with two owners is a task neither does. -->
@@ -458,7 +458,7 @@
       <button class="dialog-close" id="member-close" type="button" aria-label="Close">&times;</button>
     </div>
     <label>Name
-      <input id="member-name" maxlength="40" placeholder="Emma" autocomplete="off" enterkeyhint="done">
+      <input id="member-name" maxlength="40" autocomplete="off" enterkeyhint="done">
     </label>
     <fieldset class="swatches" id="member-colours">
       <legend>Colour</legend>
