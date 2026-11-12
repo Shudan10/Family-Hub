@@ -137,7 +137,10 @@ carry on as far ahead as the phone looks.
 
 The account has one calendar, Family Hub, for events, and a reminders list per
 person plus one for Everyone. Lists are the family: they are made and removed
-by adding and removing people here, and cannot be made on the phone.
+by adding and removing people here, and cannot be made on the phone. A
+colour or order picked for one of them on a phone is kept (in
+`settings.json`) and goes to every phone on the account; it does not change
+the person's colour in the hub.
 
 - **Whose an event is** goes in brackets after its name, both ways: the hub
   sends Emma's swim as "Swim (Emma)", and "Swim (Emma)" typed on a phone is
